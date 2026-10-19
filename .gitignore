@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Azure Functions: valori locali, mai nel repo
+local.settings.json

@@ -1,13 +1,24 @@
 # RegDoc
 
-Assistente Q&A (RAG) su documenti normativi ESMA/CONSOB. È un **progetto di studio**: lo costruisco per prepararmi all'esame Microsoft AI-200, quindi conta quanto il *come* è costruito, non solo che funzioni.
+Assistente Q&A (RAG) per tecnici manutentori: i tecnici caricano documentazione tecnica (manuali di installazione, uso e manutenzione, schede tecniche) e fanno domande tecniche sugli impianti. È un **progetto di studio**: lo costruisco per prepararmi all'esame Microsoft AI-200, quindi conta quanto il *come* è costruito, non solo che funzioni.
 
 Skill d'esame, fasi F1–F5 e avanzamento: [docs/ai200-skills.md](docs/ai200-skills.md). Non duplicare qui quel contenuto — leggilo quando serve capire a che fase appartiene un componente o quale skill copre.
+
+## Dominio generico
+
+Il progetto non è legato a un tipo di impianto: il primo **dominio** è `stufe-pellet`, domani potrebbero arrivare `caldaie` o altro. Un nuovo dominio si aggiunge con la configurazione, non con il codice.
+
+- **Campi fissi** (il codice lavora solo su questi): `domain`, `manufacturer`, `model`, `doc_type`, più `page` su ogni chunk perché le risposte citino documento e pagina.
+- **Attributi liberi** per dominio: dizionario `attributes` (es. `potenza_kw` per le stufe), che il codice non interpreta.
+- **Profilo di dominio** in App Configuration, una label per dominio: `doc_type` ammessi, attributi attesi, prompt di sistema.
 
 ## Architettura
 
 **Ingestion (F1)**
 Blob Storage → Event Grid → Azure Function → Service Bus (topic con subscription `indexer` e `audit`)
+I tecnici caricano i documenti **direttamente in Blob** (nessun endpoint di upload per ora). I campi fissi vengono dal percorso del blob, gli attributi liberi dai metadati del blob (`x-ms-meta-*`):
+`documents/{domain}/{manufacturer}/{model}/{doc_type}/{file}.pdf` — es. `documents/stufe-pellet/edilkamin/blade-h/uso-manutenzione/manuale.pdf`.
+Estrazione del testo dai PDF con `pypdf`; Document Intelligence eventualmente più avanti.
 
 **Audit (F1)**
 Subscription `audit` → consumer minimale che registra ogni messaggio nei log con OpenTelemetry. Nessuna logica di dominio: serve a rendere visibile il fan-out del topic.
@@ -41,6 +52,13 @@ az acr build --registry <acr> --image regdoc-worker:<tag> -f src/worker/Dockerfi
 - Python, SDK Azure ufficiali (`azure-*`). Niente wrapper di terze parti se l'SDK ufficiale copre il caso.
 - Autenticazione sempre con `DefaultAzureCredential` / managed identity. Mai connection string, chiavi o SAS nel codice.
 - Nessun segreto nei file committati: i secret stanno in Key Vault, endpoint e nomi risorsa in App Configuration o in variabili d'ambiente. I file con valori locali (`.env`, `local.settings.json`) restano fuori dal repo — verifica che siano in `.gitignore` prima di crearli.
+
+### Repo pubblico
+Il repository è pubblico: tutto ciò che viene committato, cronologia compresa, va considerato pubblicato.
+- Mai nel repo: subscription ID, tenant ID, client/object ID, nomi di sottoscrizioni o tenant, chiavi, connection string, SAS, token, indirizzi IP, email.
+- Gli script in `infra/` leggono questi valori da variabili d'ambiente (es. `SUBSCRIPTION_ID`) o da un `.env` locale non tracciato; nel repo va solo un `.env.example` con segnaposto.
+- Output di `az`, `kubectl` e KQL riportati nei docs (soprattutto `troubleshooting-log.md`) vanno ripuliti: resource ID come `/subscriptions/<subscription-id>/resourceGroups/...`, niente GUID o IP reali.
+- Nomi di risorse inventati per il progetto (es. `rg-regdoc-dev`) vanno bene.
 
 ### Risorse Azure
 - **Non eseguire comandi che creano o modificano risorse**: `az ... create/update/delete`, `az acr build`, `kubectl apply/delete`, `func ... publish`, `docker push`, deploy in generale. Proponili nella risposta o come script sotto `infra/`: li eseguo io, perché la configurazione fa parte dello studio.
@@ -100,7 +118,7 @@ docs/
   troubleshooting-log.md
   kql/               # F5 — query KQL salvate
 tests/
-samples/             # documenti ESMA/CONSOB di prova
+samples/             # manuali tecnici di prova (PDF pubblici)
 ```
 
 Ogni componente containerizzato ha il suo `Dockerfile` e il suo `requirements.txt` accanto al codice; `src/shared/` entra nell'immagine grazie al contesto di build.
