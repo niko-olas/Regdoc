@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "SERVICEBUS_FQDN": "sb-regdoc-<suffisso>.servicebus.windows.net",
+    "SERVICEBUS_TOPIC": "documents"
+  }
+}

@@ -219,3 +219,12 @@ __marimo__/
 
 # Azure Functions: valori locali, mai nel repo
 local.settings.json
+
+# Variabili locali per i comandi az (vedi infra/scripts/env.example.ps1)
+infra/scripts/env.ps1
+
+# Azurite (emulatore storage locale): database e dati, contengono chiavi locali dell'host Functions
+AzuriteConfig
+__azurite_db_*.json
+__blobstorage__/
+__queuestorage__/

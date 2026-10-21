@@ -44,9 +44,9 @@ Sviluppatore che partecipa a tutto il ciclo di vita di soluzioni AI su Azure (re
 ### Hosting di applicazioni container
 | Skill | Fase | Fatto |
 |---|---|---|
-| Creare, archiviare, versionare e gestire immagini con Azure Container Registry | F2 | ☐ |
-| Build ed esecuzione di immagini con ACR Tasks | F2 | ☐ |
-| Deploy di container su App Service, con env vars e secret forniti dalla configurazione di App Service | F4 | ☐ |
+| Creare, archiviare, versionare e gestire immagini con Azure Container Registry | F2 | ☑ |
+| Build ed esecuzione di immagini con ACR Tasks | F2 | ☑ |
+| Deploy di container su App Service, con env vars e secret forniti dalla configurazione di App Service | F4 | ☑ |
 
 ### Soluzioni orchestrate
 | Skill | Fase | Fatto |
@@ -87,14 +87,14 @@ Sviluppatore che partecipa a tutto il ciclo di vita di soluzioni AI su Azure (re
 ### Soluzioni basate su eventi e messaggi
 | Skill | Fase | Fatto |
 |---|---|---|
-| Service Bus per operazioni back-end in coda: messaggi, topic, subscription, dead-letter queue | F1 | ☐ |
-| Workflow event-driven con Event Grid: filtri, eventi custom, retry | F1, F2 | ☐ |
+| Service Bus per operazioni back-end in coda: messaggi, topic, subscription, dead-letter queue | F1 | ☑ |
+| Workflow event-driven con Event Grid: filtri, eventi custom, retry | F1, F2 | ◐ filtri e retry fatti; mancano dead-letter ed eventi custom (F2) |
 
 ### Azure Functions
 | Skill | Fase | Fatto |
 |---|---|---|
-| API serverless con trigger e binding | F1 | ☐ |
-| Configurazione e deploy di function app | F1 | ☐ |
+| API serverless con trigger e binding | F1 | ☑ |
+| Configurazione e deploy di function app | F1 | ☑ |
 
 ## 4. Sicurezza, monitoraggio e troubleshooting (20–25%)
 
