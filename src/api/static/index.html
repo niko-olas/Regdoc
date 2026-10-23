@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RegDoc</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#5f6b7a; --accent:#0f6cbd; --border:#dde2e8; --man:#e8f1fb; --int:#fdf1e3; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --text:#e6e9ee; --muted:#9aa5b4; --accent:#5aa4f0; --border:#2e343d; --man:#1c2b3d; --int:#3a2c1a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.4rem; margin: 8px 0 4px; } .sub { color: var(--muted); margin: 0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-weight:600; margin-bottom:6px; }
+  select, textarea, button { width:100%; font:inherit; color:inherit; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px; }
+  textarea { min-height: 90px; resize: vertical; margin-bottom: 12px; } select { margin-bottom: 12px; }
+  button { background:var(--accent); color:#fff; border:none; font-weight:600; cursor:pointer; } button:disabled { opacity:.6; cursor:wait; }
+  .answer { white-space: pre-wrap; } .cite { display:inline-block; font-size:.78rem; font-weight:700; padding:0 6px; border-radius:6px; margin:0 1px; }
+  .cite.M { background:var(--man); } .cite.I { background:var(--int); }
+  .meta { color:var(--muted); font-size:.85rem; margin-top:10px; }
+  .src { border-top:1px solid var(--border); padding:10px 0; font-size:.92rem; } .src:first-child { border-top:none; }
+  .src b { margin-right:6px; } .muted { color:var(--muted); } .err { color:#c4314b; }
+  .docs { font-size:.88rem; margin:-4px 0 14px; } .docs .ok { color:#0e7a0d; } .docs .wait { color:#a15c00; }
+</style>
+</head>
+<body>
+<main>
+  <h1>RegDoc</h1>
+  <p class="sub">Domande tecniche sugli impianti: risposte dai manuali e dagli interventi già fatti.</p>
+
+  <div class="card">
+    <label for="inst">Impianto</label>
+    <select id="inst"><option value="">Caricamento impianti…</option></select>
+    <div id="docs" class="docs muted"></div>
+    <label for="q">Domanda</label>
+    <textarea id="q" placeholder="Es. la stufa va in allarme sonda fumi dopo mezz'ora, cosa controllo?"></textarea>
+    <button id="ask">Chiedi</button>
+  </div>
+
+  <div id="out"></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function loadInstallations() {
+  try {
+    const res = await fetch("/installations");
+    if (!res.ok) throw new Error(res.status);
+    const items = await res.json();
+    $("inst").innerHTML = items.map((i) =>
+      `<option value="${esc(i.serial_number)}">${esc(i.customer)} (${esc(i.city)}) · ${esc(i.manufacturer)} ${esc(i.model)} · ${esc(i.serial_number)}</option>`).join("");
+    loadDocuments();
+  } catch (e) {
+    $("inst").innerHTML = `<option value="">Impianti non disponibili</option>`;
+  }
+}
+
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString("it-IT") : "";
+
+async function loadDocuments() {
+  const serial = $("inst").value;
+  if (!serial) { $("docs").innerHTML = ""; return; }
+  $("docs").textContent = "Cerco i manuali…";
+  try {
+    const res = await fetch(`/installations/${encodeURIComponent(serial)}/documents`);
+    if (!res.ok) throw new Error(res.status);
+    const body = await res.json();
+    if (!body.documents.length) {
+      $("docs").innerHTML = `Nessun manuale per ${esc(body.model)}: le risposte useranno solo gli interventi già fatti.`;
+      return;
+    }
+    $("docs").innerHTML = "Manuali disponibili: " + body.documents.map((d) => d.status === "indicizzato"
+      ? `<span class="ok">📄 ${esc(d.doc_type)} (indicizzato il ${fmtDate(d.indexed_at)})</span>`
+      : `<span class="wait">⏳ ${esc(d.doc_type)} (in indicizzazione)</span>`).join(" · ");
+  } catch (e) {
+    $("docs").textContent = "";
+  }
+}
+
+function renderAnswer(text) {
+  return esc(text).replace(/\[(M|I)(\d+)\]/g, (_, k, n) => `<span class="cite ${k}">${k}${n}</span>`)
+                  .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+}
+
+function renderSource(s) {
+  if (s.kind === "manuale")
+    return `<div class="src"><span class="cite M">${s.id}</span><b>${esc(s.file_name)}</b> pagina ${s.page}
+            <div class="muted">${esc(s.excerpt)}…</div></div>`;
+  return `<div class="src"><span class="cite I">${s.id}</span><b>${esc(s.external_ref)}</b> ${esc(s.performed_on)} · ${esc(s.model)}
+          <div>Sintomo: ${esc(s.symptom)}</div><div class="muted">Intervento: ${esc(s.resolution)}</div></div>`;
+}
+
+async function ask() {
+  const question = $("q").value.trim();
+  if (question.length < 3) return;
+  $("ask").disabled = true; $("ask").textContent = "Sto cercando…";
+  $("out").innerHTML = "";
+  try {
+    const res = await fetch("/ask", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, serial_number: $("inst").value || null }) });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || res.status);
+    const cache = body.cache === "miss" ? "" : ` · dalla cache (${body.cache})`;
+    $("out").innerHTML = `
+      <div class="card"><div class="answer">${renderAnswer(body.answer)}</div>
+        <div class="meta">${body.timings_ms.totale} ms${cache}</div></div>
+      <div class="card"><label>Fonti</label>${body.sources.map(renderSource).join("") || '<span class="muted">Nessuna fonte</span>'}</div>`;
+  } catch (e) {
+    $("out").innerHTML = `<div class="card err">Errore: ${esc(e.message)}</div>`;
+  } finally {
+    $("ask").disabled = false; $("ask").textContent = "Chiedi";
+  }
+}
+
+$("ask").addEventListener("click", ask);
+$("inst").addEventListener("change", loadDocuments);
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask(); });
+loadInstallations();
+</script>
+</body>
+</html>

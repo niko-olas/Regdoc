@@ -21,7 +21,7 @@ from azure.servicebus import (
 from azure.storage.blob import BlobClient
 
 from worker.chunking import build_chunks
-from worker.embeddings import Embedder
+from shared.foundry import Embedder
 from worker.errors import InvalidDocument, PermanentError
 from worker.messages import IndexRequest, parse_body
 from worker.pdf import extract_pages
@@ -50,8 +50,8 @@ def index_document(request: IndexRequest, credential, embedder: Embedder, stores
     chunks = build_chunks(request, pages)
     vectors = embedder.embed([c.text for c in chunks])
     chunks = [replace(c, embedding=v) for c, v in zip(chunks, vectors, strict=True)]
-    # Scrittura su tutti gli store configurati (Cosmos ora, pgvector in F3): il feature flag
-    # di App Configuration sceglierà solo da quale legge l'API, non dove si scrive.
+    # Scrittura su tutti gli store configurati: oggi solo Cosmos. L'interfaccia permette di
+    # aggiungerne o sostituirne uno senza toccare il resto della pipeline.
     return [store.replace_document(request.domain, chunks[0].document_id, chunks) for store in stores]
 
 
@@ -91,7 +91,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop)
 
     credential = DefaultAzureCredential()
-    embedder = Embedder(os.environ["FOUNDRY_ENDPOINT"], os.getenv("EMBEDDING_DEPLOYMENT", "text-embedding-3-small"), credential)
+    embedder = Embedder(os.environ["FOUNDRY_ENDPOINT"], credential)
     stores: list[VectorStore] = [
         CosmosVectorStore(
             os.environ["COSMOS_ENDPOINT"],

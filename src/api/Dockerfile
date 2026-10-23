@@ -1,4 +1,4 @@
-# Contesto di build = src/ (vedi CLAUDE.md), così in F5 potremo copiare anche shared/.
+# Contesto di build = src/ (vedi CLAUDE.md): l'immagine copia anche shared/ e fielddata/.
 # Build: docker build -t regdoc-api:dev -f src/api/Dockerfile src/
 FROM python:3.12-slim
 
@@ -9,6 +9,8 @@ WORKDIR /app
 COPY api/requirements.txt api/requirements.txt
 RUN pip install --no-cache-dir -r api/requirements.txt
 
+COPY shared/ shared/
+COPY fielddata/ fielddata/
 COPY api/ api/
 
 # La versione appartiene all'immagine, non alla configurazione: la passa la build

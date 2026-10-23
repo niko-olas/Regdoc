@@ -1,4 +1,4 @@
-"""Interfaccia comune agli store vettoriali: Cosmos DB (F2) e PostgreSQL con pgvector (F3)."""
+"""Interfaccia degli store vettoriali in cui il worker scrive i chunk dei manuali (oggi Cosmos DB)."""
 from abc import ABC, abstractmethod
 
 from shared.models import Chunk

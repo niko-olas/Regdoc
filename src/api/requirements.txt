@@ -1,2 +1,13 @@
 fastapi==0.115.14
 uvicorn[standard]==0.32.1
+azure-identity==1.26.0
+azure-cosmos==4.17.1
+openai==3.37.0
+psycopg[binary]==3.3.6
+psycopg-pool==3.3.3
+pgvector==0.5.1
+redis==8.1.0
+redis-entraid==1.2.2
+azure-appconfiguration-provider==2.5.0
+featuremanagement==2.2.0
+azure-monitor-opentelemetry==1.8.11

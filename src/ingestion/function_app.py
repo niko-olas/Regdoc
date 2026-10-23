@@ -8,11 +8,13 @@ from azure.identity import DefaultAzureCredential
 from azure.servicebus import ServiceBusClient, ServiceBusMessage, ServiceBusSender
 from azure.storage.blob import BlobClient
 
+from catalog import bp as catalog_bp
 from changefeed import bp as changefeed_bp
 from documents import InvalidBlobPath, build_message, parse_subject
 
 app = func.FunctionApp()
 app.register_functions(changefeed_bp)
+app.register_functions(catalog_bp)
 
 # Gli SDK Azure registrano ogni richiesta HTTP (URL e header) a livello INFO:
 # in Application Insights diventerebbero più righe dei log applicativi.

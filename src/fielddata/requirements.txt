@@ -1,0 +1,4 @@
+azure-identity==1.26.0
+psycopg[binary]==3.3.6
+pgvector==0.5.1
+psycopg-pool==3.3.3

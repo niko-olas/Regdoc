@@ -1,19 +1,24 @@
-"""Change feed del container `chunks` → evento custom su Event Grid.
+"""Change feed del container `chunks` → evento custom su Event Grid, catalogo dei documenti
+e invalidazione della cache Redis.
 
 Blueprint registrato in function_app.py: la funzione vive nella stessa Function App
 dell'ingestion ma resta in un modulo separato.
 """
 import logging
 import os
+from datetime import datetime, timezone
 
 import azure.functions as func
 from azure.core.messaging import CloudEvent
 from azure.eventgrid import EventGridPublisherClient
 from azure.identity import DefaultAzureCredential
 
+from cache_invalidation import bump_versions
+from catalog_store import UPSERT_INDEXED, connect, indexed_record
 from indexed_events import EVENT_SOURCE, EVENT_TYPE, summarize_changes
 
 bp = func.Blueprint()
+_credential = DefaultAzureCredential()
 _publisher: EventGridPublisherClient | None = None
 
 
@@ -21,7 +26,7 @@ def _get_publisher() -> EventGridPublisherClient:
     global _publisher
     if _publisher is None:
         # Entra ID (EventGrid Data Sender): le chiavi del topic sono disattivate.
-        _publisher = EventGridPublisherClient(os.environ["EVENTGRID_TOPIC_ENDPOINT"], DefaultAzureCredential())
+        _publisher = EventGridPublisherClient(os.environ["EVENTGRID_TOPIC_ENDPOINT"], _credential)
     return _publisher
 
 
@@ -58,3 +63,15 @@ def on_chunks_changed(docs: func.DocumentList) -> None:
         "Change feed: %d modifiche, %d eventi %s pubblicati (%s)",
         len(docs), len(events), EVENT_TYPE, ", ".join(e.subject for e in events),
     )
+    # Catalogo: il documento risulta indicizzato. Upsert idempotente, ripeterlo è innocuo.
+    now = datetime.now(timezone.utc)
+    with connect(_credential) as conn:
+        for s in summaries:
+            conn.execute(UPSERT_INDEXED, indexed_record(s, now))
+
+    # Le risposte in cache citano i manuali vecchi: si invalidano dopo l'evento. Se Redis o
+    # PostgreSQL falliscono, l'eccezione fa ritentare il lotto (retry policy sopra): rimandare
+    # l'evento e riscrivere il catalogo è innocuo.
+    versions = bump_versions({s["domain"] for s in summaries})
+    if versions:
+        logging.info("Cache invalidata: %s", versions)

@@ -4,7 +4,7 @@
 #   .venv\Scripts\python -m pytest tests/
 -r src/api/requirements.txt
 -r src/ingestion/requirements.txt
--r src/audit/requirements.txt
 -r src/worker/requirements.txt
+-r src/fielddata/requirements.txt
 pytest==9.1.1
 httpx==0.28.1
