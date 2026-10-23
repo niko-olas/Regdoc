@@ -93,4 +93,24 @@ resource chunks 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2
   }
 }
 
+// Lease container del change feed processor (trigger Cosmos DB di Azure Functions):
+// un documento "segnalibro" per ogni intervallo di partizioni letto. Va creato qui perché
+// con l'RBAC nativo di Cosmos (Entra ID) il trigger non può creare container da solo.
+// Partition key /id: è quella richiesta per i lease container.
+resource leases 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2025-04-15' = {
+  parent: database
+  name: 'leases'
+  properties: {
+    resource: {
+      id: 'leases'
+      partitionKey: {
+        paths: [
+          '/id'
+        ]
+        kind: 'Hash'
+      }
+    }
+  }
+}
+
 output containerId string = chunks.id

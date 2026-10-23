@@ -84,7 +84,9 @@ def _handle(receiver: ServiceBusReceiver, msg: ServiceBusReceivedMessage, creden
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("azure").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    # Una riga INFO per ogni richiesta HTTP del client openai (logger httpx o httpx2, a seconda della versione).
+    for name in ("httpx", "httpx2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 

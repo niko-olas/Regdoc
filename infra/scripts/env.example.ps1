@@ -38,3 +38,12 @@ $COSMOS = "cosmos-regdoc-<suffisso>"
 # Foundry (Azure AI Services). Il nome diventa anche il sottodominio <nome>.cognitiveservices.azure.com: globale.
 $FOUNDRY = "ais-regdoc-<suffisso>"
 
+# Container Apps (F2): nomi non globali.
+$ACA_ENV    = "cae-regdoc-dev"
+$WORKER_APP = "ca-regdoc-worker"
+$WORKER_ID  = "id-regdoc-worker"
+$SCALER_ID  = "id-regdoc-scaler"
+
+# Custom topic Event Grid per gli eventi "documento indicizzato" (F2). Nome regionale: <nome>.<regione>-1.eventgrid.azure.net
+$EG_CUSTOM_TOPIC = "evgt-regdoc-indexed-<suffisso>"
+

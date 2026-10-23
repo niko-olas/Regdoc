@@ -64,7 +64,7 @@ Sviluppatore che partecipa a tutto il ciclo di vita di soluzioni AI su Azure (re
 | Connessione tramite SDK ed esecuzione di query | F2 | ☑ |
 | Ottimizzazione di performance e consumo di RU con indexing policy e consistency level | F2 | ☑ |
 | Salvataggio e lettura di embedding, vector similarity search per retrieval semantico | F2 | ☑ |
-| Change feed processor per reagire a item nuovi o modificati | F2 | ☐ |
+| Change feed processor per reagire a item nuovi o modificati | F2 | ☑ |
 
 ### Azure Database for PostgreSQL
 | Skill | Fase | Fatto |
@@ -88,7 +88,7 @@ Sviluppatore che partecipa a tutto il ciclo di vita di soluzioni AI su Azure (re
 | Skill | Fase | Fatto |
 |---|---|---|
 | Service Bus per operazioni back-end in coda: messaggi, topic, subscription, dead-letter queue | F1 | ☑ |
-| Workflow event-driven con Event Grid: filtri, eventi custom, retry | F1, F2 | ◐ filtri e retry fatti; mancano dead-letter ed eventi custom (F2) |
+| Workflow event-driven con Event Grid: filtri, eventi custom, retry | F1, F2 | ☑ |
 
 ### Azure Functions
 | Skill | Fase | Fatto |

@@ -8,9 +8,15 @@ from azure.identity import DefaultAzureCredential
 from azure.servicebus import ServiceBusClient, ServiceBusMessage, ServiceBusSender
 from azure.storage.blob import BlobClient
 
+from changefeed import bp as changefeed_bp
 from documents import InvalidBlobPath, build_message, parse_subject
 
 app = func.FunctionApp()
+app.register_functions(changefeed_bp)
+
+# Gli SDK Azure registrano ogni richiesta HTTP (URL e header) a livello INFO:
+# in Application Insights diventerebbero più righe dei log applicativi.
+logging.getLogger("azure").setLevel(logging.WARNING)
 
 # Credenziale e client creati una volta per istanza e riusati tra le invocazioni:
 # aprire una connessione AMQP a ogni evento aggiunge latenza e, sotto carico,

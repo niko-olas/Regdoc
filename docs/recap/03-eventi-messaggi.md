@@ -140,11 +140,12 @@ Dal portale: subscription → **Service Bus Explorer** → *Peek Mode* (non Rece
 
 ---
 
-## Da completare (F2)
+## Completato in F2
 
-- **Dead-letter di Event Grid** su container blob, con managed identity del system topic.
-- **Eventi custom**: il change feed di Cosmos pubblicherà un evento su un custom topic Event Grid.
-- I 4 messaggi di test accumulati in `indexer` (tra cui uno non JSON) saranno il primo banco di prova del worker.
+- **Eventi custom** e **dead-letter di Event Grid**: vedi [04-cosmos-db.md](04-cosmos-db.md), sezione 7 — custom topic CloudEvents,
+  event subscription verso coda Storage con consegna e dead-letter tramite l'identità del topic.
+- I 4 messaggi di test accumulati in `indexer` sono finiti in dead-letter al primo avvio del worker, ciascuno con il motivo atteso
+  (`InvalidDocument` ×2, `InvalidMessage` ×2).
 
 ## Trappole d'esame
 
