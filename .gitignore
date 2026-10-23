@@ -228,3 +228,6 @@ AzuriteConfig
 __azurite_db_*.json
 __blobstorage__/
 __queuestorage__/
+
+# Manuali di prova: di solito coperti da copyright. Per un PDF con licenza libera: git add -f
+samples/*.pdf

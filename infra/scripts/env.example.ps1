@@ -32,3 +32,9 @@ $FUNC_STORAGE = "stregdocfn<suffisso>"
 $FUNCAPP      = "func-regdoc-ingest-<suffisso>"
 $EG_TOPIC = "evgt-regdoc-documents"
 
+# Indicizzazione (F2). Nome globale (<nome>.documents.azure.com): 3-44 caratteri, minuscole, numeri e trattini.
+$COSMOS = "cosmos-regdoc-<suffisso>"
+
+# Foundry (Azure AI Services). Il nome diventa anche il sottodominio <nome>.cognitiveservices.azure.com: globale.
+$FOUNDRY = "ais-regdoc-<suffisso>"
+

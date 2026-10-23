@@ -51,8 +51,8 @@ Sviluppatore che partecipa a tutto il ciclo di vita di soluzioni AI su Azure (re
 ### Soluzioni orchestrate
 | Skill | Fase | Fatto |
 |---|---|---|
-| Deploy su Azure Container Apps: configurazione dell'environment e gestione delle revisioni | F2 | ☐ |
-| Scaling event-driven con KEDA in Container Apps | F2 | ☐ |
+| Deploy su Azure Container Apps: configurazione dell'environment e gestione delle revisioni | F2 | ☑ |
+| Scaling event-driven con KEDA in Container Apps | F2 | ☑ |
 | Deploy e gestione su AKS tramite file manifest | F4 | ☐ |
 | Monitoraggio e troubleshooting su AKS e Container Apps: log, eventi, connettività end-to-end | F2, F4 | ☐ |
 
@@ -61,9 +61,9 @@ Sviluppatore che partecipa a tutto il ciclo di vita di soluzioni AI su Azure (re
 ### Azure Cosmos DB for NoSQL
 | Skill | Fase | Fatto |
 |---|---|---|
-| Connessione tramite SDK ed esecuzione di query | F2 | ☐ |
-| Ottimizzazione di performance e consumo di RU con indexing policy e consistency level | F2 | ☐ |
-| Salvataggio e lettura di embedding, vector similarity search per retrieval semantico | F2 | ☐ |
+| Connessione tramite SDK ed esecuzione di query | F2 | ☑ |
+| Ottimizzazione di performance e consumo di RU con indexing policy e consistency level | F2 | ☑ |
+| Salvataggio e lettura di embedding, vector similarity search per retrieval semantico | F2 | ☑ |
 | Change feed processor per reagire a item nuovi o modificati | F2 | ☐ |
 
 ### Azure Database for PostgreSQL
