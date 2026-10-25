@@ -1,4 +1,4 @@
-"""Lettura del messaggio prodotto da on_blob_created (src/functions/blob_created/documents.py)."""
+"""Lettura del messaggio prodotto da on_blob_created (src/functions/ingest/blob_created/documents.py)."""
 import json
 from dataclasses import dataclass
 

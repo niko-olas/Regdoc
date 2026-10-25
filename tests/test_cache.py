@@ -1,5 +1,5 @@
 from api import cache
-from functions.changefeed import cache_invalidation
+from functions.catalog.changefeed import cache_invalidation
 
 
 def test_api_e_function_usano_la_stessa_chiave_di_versione():

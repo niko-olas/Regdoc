@@ -14,6 +14,29 @@ Formato di una voce:
 
 ---
 
+## 2026-10-25 — Due Function App: ingest e catalog
+
+**Decisione**: le tre funzioni passano da una Function App a due. `func-regdoc-ingest` ospita `on_blob_created`;
+`func-regdoc-catalog` ospita `on_document_uploaded` e `on_chunks_changed`, che scrivono la stessa tabella del
+catalogo. Ogni app ha la sua identità system-assigned, il suo piano Flex Consumption e il suo storage dell'host
+(modulo `infra/modules/function-app.bicep`). `ingest` ha solo Blob Data Reader sul container `documents` e Service
+Bus Data Sender sul topic; i ruoli su PostgreSQL, Cosmos, Event Grid e Redis sono solo di `catalog`, limitata a
+2 istanze con `maxConcurrentCalls: 4`. Codice in `src/functions/ingest` e `src/functions/catalog`.
+
+**Alternative scartate**: una sola Function App (un'identità con l'unione dei permessi: la funzione che riceve
+eventi su file caricati da fuori poteva scrivere su PostgreSQL e usare ogni comando Redis); tre Function App (il
+catalogo è scritto da due funzioni che condividono codice e permessi: dividerle aggiunge un'identità e un deploy
+senza togliere permessi); storage dell'host condiviso tra le due app (ogni identità avrebbe Blob Owner su chiavi e
+pacchetti dell'altra, più il rischio di host ID collision).
+
+**Motivo**: minimo privilegio per funzione, ottenibile solo separando le app perché le funzioni di un'app
+condividono l'identità. In più, scaling indipendente: `catalog` apre connessioni a PostgreSQL B1ms (50, di cui
+15 riservate) e resta sotto le ~10 connessioni, mentre `ingest` può scalare fino a 10 istanze. Flex Consumption
+ammette un'app per piano: due piani, costo zero a riposo.
+
+**Fase / skill**: F1–F3 — Azure Functions (configurazione e deploy di function app, connessioni a identità,
+scaling); sicurezza con managed identity.
+
 ## 2026-10-25 — Manifest per documento: "indicizzato" solo quando è completo
 
 **Decisione**: dopo i chunk e la cancellazione di quelli in eccesso, il worker scrive per ultimo un item

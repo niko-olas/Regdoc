@@ -13,7 +13,7 @@ from azure.eventgrid import EventGridPublisherClient
 from azure.identity import DefaultAzureCredential
 
 from changefeed.cache_invalidation import bump_versions
-from catalog.store import UPSERT_INDEXED, connect, indexed_record
+from catalog_store import UPSERT_INDEXED, connect, indexed_record
 from changefeed.indexed_events import EVENT_SOURCE, EVENT_TYPE, summarize_changes
 
 bp = func.Blueprint()

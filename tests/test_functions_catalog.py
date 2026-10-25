@@ -2,9 +2,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from functions.catalog.store import indexed_record, upload_record
-from functions.blob_created.documents import DocumentRef, build_message
-from functions.changefeed.indexed_events import summarize_changes
+from functions.catalog.catalog_store import indexed_record, upload_record
+from functions.ingest.blob_created.documents import DocumentRef, build_message
+from functions.catalog.changefeed.indexed_events import summarize_changes
 
 NOW = datetime(2026, 10, 23, 20, 0, tzinfo=timezone.utc)
 REF = DocumentRef("stufe-pellet", "extraflame", "karolina", "manuale-utente", "karolina.pdf",

@@ -9,7 +9,7 @@ import logging
 import azure.functions as func
 from azure.identity import DefaultAzureCredential
 
-from catalog.store import UPSERT_UPLOAD, connect, upload_record
+from catalog_store import UPSERT_UPLOAD, connect, upload_record
 
 bp = func.Blueprint()
 _credential = DefaultAzureCredential()

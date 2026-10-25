@@ -1,6 +1,6 @@
 import pytest
 
-from functions.blob_created.documents import InvalidBlobPath, build_message, parse_subject
+from functions.ingest.blob_created.documents import InvalidBlobPath, build_message, parse_subject
 
 PREFIX = "/blobServices/default/containers/documents/blobs/"
 

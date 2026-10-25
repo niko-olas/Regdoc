@@ -20,13 +20,14 @@ Il progetto non è legato a un tipo di impianto: il primo **dominio** è `stufe-
 ## Architettura
 
 **Ingestion (F1)**
-Blob Storage → Event Grid → Azure Function → Service Bus (topic `documents` con subscription `indexer` e `catalog`)
+Blob Storage → Event Grid → Function App `ingest` (`on_blob_created`) → Service Bus (topic `documents` con subscription `indexer` e `catalog`)
+Le funzioni stanno in **due Function App** con identità separate (minimo privilegio): `ingest` riceve gli eventi sui file caricati e può solo leggere i blob e inviare sul topic; `catalog` ospita le due funzioni che scrivono il catalogo e ha i ruoli su PostgreSQL, Cosmos, Event Grid e Redis.
 I tecnici caricano i documenti **direttamente in Blob** (nessun endpoint di upload per ora). I campi fissi vengono dal percorso del blob, gli attributi liberi dai metadati del blob (`x-ms-meta-*`):
 `documents/{domain}/{manufacturer}/{model}/{doc_type}/{file}.pdf` — es. `documents/stufe-pellet/edilkamin/blade-h/uso-manutenzione/manuale.pdf`.
 Estrazione del testo dai PDF con `pypdf`; Document Intelligence eventualmente più avanti.
 
 **Catalogo dei documenti (F1–F3)**
-Subscription `catalog` → funzione `on_document_uploaded` (trigger Service Bus) → tabella `documents` su PostgreSQL. Il change feed segna il documento come indicizzato. L'API mostra al tecnico quali manuali esistono per il prodotto e se sono già interrogabili; chi gestisce i documenti vede quelli rimasti bloccati.
+Subscription `catalog` → funzione `on_document_uploaded` (trigger Service Bus, Function App `catalog`) → tabella `documents` su PostgreSQL. Il change feed segna il documento come indicizzato. L'API mostra al tecnico quali manuali esistono per il prodotto e se sono già interrogabili; chi gestisce i documenti vede quelli rimasti bloccati.
 
 **Indicizzazione dei manuali (F2)**
 Subscription `indexer` → worker Python su Container Apps (scaling KEDA sulla coda) → chunk + embedding con Foundry → **Cosmos DB for NoSQL** (container `chunks`, partition key gerarchica `domain`/`document_id`, vector index). Il worker scrive dietro l'interfaccia `VectorStore`: prima i chunk, per ultimo un **manifest** (`kind: "manifest"`, numero di chunk e pagine) nella stessa partizione logica, che segnala il documento completo.
@@ -35,7 +36,7 @@ Subscription `indexer` → worker Python su Container Apps (scaling KEDA sulla c
 **PostgreSQL Flexible Server con pgvector**: schema relazionale clienti → impianti → interventi; embedding delle note d'intervento per trovare guasti simili già risolti, con filtri relazionali (stesso modello, stesso dominio). In un'azienda questi dati arriverebbero dal gestionale (CRM/ERP); nel progetto li carica uno script di import con dati di esempio anonimi.
 
 **Reazione alle modifiche (F2–F3)**
-Change feed di `chunks` → funzione `on_chunks_changed` (trigger Cosmos DB), che reagisce solo ai manifest (i chunk di un manuale arrivano in più lotti) → evento custom `RegDoc.Document.Indexed` su Event Grid, documento indicizzato nel catalogo, invalidazione delle risposte in cache su Azure Managed Redis.
+Change feed di `chunks` → funzione `on_chunks_changed` (trigger Cosmos DB, Function App `catalog`), che reagisce solo ai manifest (i chunk di un manuale arrivano in più lotti) → evento custom `RegDoc.Document.Indexed` su Event Grid, documento indicizzato nel catalogo, invalidazione delle risposte in cache su Azure Managed Redis.
 
 **Query (F4)**
 API in container su App Service, con interfaccia web per i tecnici. Il tecnico sceglie il prodotto (dominio, marca, modello), mai il cliente. Per una domanda: pagine dei manuali del modello (Cosmos) + interventi simili sullo stesso modello (pgvector) → risposta con citazioni (documento, pagina, intervento). La matricola è facoltativa (solo API): aggiunge lo storico di quell'impianto (PostgreSQL). Nel prompt e in cache nessun dato dei clienti. Risposte in cache su Redis (esatta e semantica). I **feature flag in App Configuration** attivano a runtime la cache semantica e l'uso degli interventi nelle risposte. AKS non ha un ruolo nel prodotto: si studia con un esperimento separato.
@@ -44,7 +45,7 @@ API in container su App Service, con interfaccia web per i tecnici. Il tecnico s
 App Configuration (config e feature flag), OpenTelemetry → Application Insights. L'app non ha segreti (solo managed identity): Key Vault si studia con un esperimento separato.
 
 **Infrastruttura**
-Tutto in `infra/main.bicep`. `scripts/deploy/up.ps1` crea l'ambiente da zero (Bicep in due passate, immagini, Function, dati di esempio); `scripts/deploy/down.ps1` lo cancella a fine sessione, così i costi restano a zero tra una sessione e l'altra.
+Tutto in `infra/main.bicep`. `scripts/deploy/up.ps1` crea l'ambiente da zero (Bicep in due passate, immagini, le due Function App, dati di esempio); `scripts/deploy/down.ps1` lo cancella a fine sessione, così i costi restano a zero tra una sessione e l'altra.
 
 ## Sviluppo
 
@@ -88,17 +89,19 @@ Dopo ogni problema risolto, proponi allo stesso modo una voce per `docs/troubles
 ```
 src/
   shared/              # libreria comune: modelli dei chunk, client degli embedding, config, telemetria
-  functions/           # Function App: una cartella per funzione, registrate come blueprint
-    function_app.py    #   registra i blueprint
-    blob_created/      #   on_blob_created: Event Grid → topic documents
-    catalog/           #   on_document_uploaded: subscription catalog → catalogo (PostgreSQL)
-    changefeed/        #   on_chunks_changed: manifest dal change feed → evento custom, catalogo, invalidazione cache
+  functions/           # due Function App, una cartella per funzione registrata come blueprint
+    ingest/            #   app ingest (radice di func publish: function_app.py, host.json, requirements.txt)
+      blob_created/    #     on_blob_created: Event Grid → topic documents
+    catalog/           #   app catalog (radice di func publish)
+      catalog_store.py #     scrittura del catalogo, usata dalle due funzioni
+      document_uploaded/ #   on_document_uploaded: subscription catalog → catalogo (PostgreSQL)
+      changefeed/      #     on_chunks_changed: manifest dal change feed → evento custom, catalogo, invalidazione cache
   worker/              # consumer della subscription indexer su Container Apps: PDF → chunk → Cosmos
   fielddata/           # accesso a PostgreSQL: impianti, interventi, catalogo, ricerca di guasti simili
   api/                 # API di query e interfaccia web (static/), immagine per App Service
 infra/
   main.bicep           # tutta l'infrastruttura
-  modules/             # moduli Bicep (database e container Cosmos)
+  modules/             # moduli Bicep: database e container Cosmos, Function App (piano, storage dell'host, identità)
   postgres/schema.sql  # schema dei dati dal campo e del catalogo
 scripts/
   env.example.ps1      # variabili dei comandi az (copia in env.ps1, non tracciato)

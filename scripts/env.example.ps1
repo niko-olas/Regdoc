@@ -26,10 +26,12 @@ $STORAGE = "stregdoc<suffisso>"
 # Nome globale (<nome>.servicebus.windows.net): 6-50 caratteri, lettere, numeri e trattini.
 $SB_NAMESPACE = "sb-regdoc-<suffisso>"
 
-# Function App (src/functions) e il suo storage "di servizio" (chiavi dell'host, pacchetti di deploy),
-# separato da quello dei documenti. Stesse regole di nome dello storage sopra.
-$FUNC_STORAGE = "stregdocfn<suffisso>"
-$FUNCAPP      = "func-regdoc-ingest-<suffisso>"
+# Due Function App (src/functions/ingest e src/functions/catalog), ognuna con il suo storage "di servizio"
+# (chiavi dell'host, pacchetti di deploy), separato da quello dei documenti. Stesse regole di nome dello storage sopra.
+$FUNC_INGEST_STORAGE  = "stregdocfning<suffisso>"
+$FUNCAPP_INGEST       = "func-regdoc-ingest-<suffisso>"
+$FUNC_CATALOG_STORAGE = "stregdocfncat<suffisso>"
+$FUNCAPP_CATALOG      = "func-regdoc-catalog-<suffisso>"
 $EG_TOPIC = "evgt-regdoc-documents"
 
 # Indicizzazione (F2). Nome globale (<nome>.documents.azure.com): 3-44 caratteri, minuscole, numeri e trattini.

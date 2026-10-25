@@ -73,10 +73,14 @@ foreach ($img in @(@("regdoc-worker", $WORKER_TAG, "src/worker/Dockerfile"), @("
     Write-Host "  ${name}:$tag -> ok"
 }
 
-Step "4/8 Codice della Function"
-Push-Location src/functions
-try { Retry { func azure functionapp publish $out.funcAppName.value --python } "Pubblicazione della Function" }
-finally { Pop-Location }
+Step "4/8 Codice delle Function App (ingest e catalog)"
+foreach ($fn in @(@("src/functions/ingest", $out.funcIngestName.value), @("src/functions/catalog", $out.funcCatalogName.value))) {
+    $folder, $name = $fn
+    Push-Location $folder
+    try { Retry { func azure functionapp publish $name --python } "Pubblicazione di $name" }
+    finally { Pop-Location }
+    Write-Host "  $name -> ok"
+}
 
 Step "5/8 Worker e sottoscrizioni Event Grid (Bicep, seconda passata)"
 Retry { $script:out = Deploy-Bicep "true" } "Seconda passata" 6
@@ -95,7 +99,7 @@ Retry {
 } "Scrittura dei feature flag"
 Write-Host "  use-interventions=on, semantic-cache=on"
 
-Step "7/8 PostgreSQL: schema, ruoli di API e Function, dati di esempio"
+Step "7/8 PostgreSQL: schema, ruoli di API e Function App catalog, dati di esempio"
 $state = az postgres flexible-server show -g $RG -n $PG --query state -o tsv
 if ($state -eq "Stopped") { az postgres flexible-server start -g $RG -n $PG -o none }
 $env:PGHOST = $out.pgHost.value
@@ -103,7 +107,8 @@ $env:PGUSER = $ME_UPN
 $env:FOUNDRY_ENDPOINT = $out.foundryEndpoint.value
 Retry { .venv\Scripts\python.exe scripts\db\apply_schema.py } "Schema PostgreSQL"
 .venv\Scripts\python.exe scripts\db\grant_app_role.py $out.webAppName.value api
-.venv\Scripts\python.exe scripts\db\grant_app_role.py $out.funcAppName.value catalog
+# Solo la Function App catalog scrive il catalogo; ingest non ha un ruolo su PostgreSQL.
+.venv\Scripts\python.exe scripts\db\grant_app_role.py $out.funcCatalogName.value catalog
 Retry { .venv\Scripts\python.exe scripts\db\import_field_data.py } "Import dei dati (embedding)"
 
 Step "8/8 Manuale di prova e riavvio dell'API"

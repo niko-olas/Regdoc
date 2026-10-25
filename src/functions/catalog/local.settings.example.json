@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "ServiceBusConnection__fullyQualifiedNamespace": "sb-regdoc-<suffisso>.servicebus.windows.net",
+    "PGHOST": "psql-regdoc-<suffisso>-ne.postgres.database.azure.com",
+    "PGUSER": "<il tuo UPN, con i permessi del profilo catalog>",
+    "CosmosDB__accountEndpoint": "https://cosmos-regdoc-<suffisso>.documents.azure.com:443/",
+    "EVENTGRID_TOPIC_ENDPOINT": "https://evgt-regdoc-indexed-<suffisso>.<regione>-1.eventgrid.azure.net/api/events",
+    "REDIS_HOST": "redis-regdoc-<suffisso>.<regione>.redis.azure.net"
+  }
+}

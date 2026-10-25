@@ -26,13 +26,19 @@ Immagini: non ancora ricostruite con un nuovo tag (in `up.ps1` restano `regdoc-a
 - La ricerca dei manuali filtra `kind = 'chunk'`; `sync_catalog.py` legge i manifest invece di tutti i chunk.
 - Il prompt non contiene nome e città del cliente; la risposta di `/ask` non contiene i dati dell'impianto
   (solo la matricola in `scope`); `RESPONSE_FORMAT` della cache portato a 3.
-- `src/ingestion` diventa `src/functions`: una cartella per funzione (`blob_created/`, `catalog/`, `changefeed/`),
-  registrate come blueprint da `function_app.py`. Nessun cambio di comportamento.
+- `src/ingestion` diventa `src/functions`, con **due Function App** e una cartella per funzione registrata come
+  blueprint: `ingest/` (`blob_created/`) e `catalog/` (`document_uploaded/`, `changefeed/`, `catalog_store.py`).
+- Infrastruttura: le due app hanno identità, piano Flex Consumption e storage dell'host separati (modulo
+  `infra/modules/function-app.bicep`). `ingest` ha solo lettura dei blob e invio sul topic; PostgreSQL, Cosmos,
+  Event Grid e Redis passano all'identità di `catalog`, limitata a 2 istanze e 4 messaggi contemporanei per istanza
+  per non saturare le connessioni di PostgreSQL. `up.ps1` pubblica le due app; in `env.example.ps1`
+  `FUNCAPP_INGEST` e `FUNCAPP_CATALOG` sostituiscono `FUNCAPP`.
 
 ### Corretto
 - Catalogo ed evento segnavano un documento come indicizzato al primo lotto del change feed, quando mancavano
   ancora dei chunk (un manuale da 106 chunk arrivava in 2 lotti e produceva 2 eventi).
 - Un hit esatto della cache restituiva i dati del cliente salvati in Redis, anche se nel frattempo erano cambiati.
+- `requirements-dev.txt` puntava ancora a `src/ingestion/requirements.txt` dopo la rinomina della cartella.
 
 ### Rimosso
 - `GET /installations` e `GET /installations/{serial}/documents`: l'elenco dei clienti non è più esposto.

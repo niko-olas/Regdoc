@@ -22,7 +22,7 @@ from redis.commands.search.query import Query
 
 log = logging.getLogger("regdoc.cache")
 
-# Stessa chiave usata da src/functions/changefeed/cache_invalidation.py: le due app non condividono codice
+# Stessa chiave usata da src/functions/catalog/changefeed/cache_invalidation.py: le due app non condividono codice
 # (deploy separati), un test verifica che restino uguali.
 VERSION_KEY = "regdoc:ver:{domain}"
 SEM_PREFIX = "regdoc:sem:"

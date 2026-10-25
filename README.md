@@ -32,14 +32,14 @@ configurazione e i documenti, non con il codice.
 flowchart LR
     PDF[PDF caricato] --> BLOB[(Blob Storage)]
     BLOB -- BlobCreated --> EG[Event Grid]
-    EG --> F1[Function<br/>on_blob_created]
+    EG --> F1[Function App ingest<br/>on_blob_created]
     F1 --> SB{{Service Bus<br/>topic documents}}
     SB -- indexer --> W[Worker<br/>Container Apps + KEDA]
-    SB -- catalog --> F2[Function<br/>on_document_uploaded]
+    SB -- catalog --> F2[Function App catalog<br/>on_document_uploaded]
     W -- embedding --> AI[Foundry<br/>Azure OpenAI]
     W --> COSMOS[(Cosmos DB<br/>chunk + vettori)]
     F2 --> PG[(PostgreSQL + pgvector<br/>impianti, interventi, catalogo)]
-    COSMOS -- change feed --> F3[Function<br/>on_chunks_changed]
+    COSMOS -- change feed --> F3[Function App catalog<br/>on_chunks_changed]
     F3 --> PG
     F3 --> REDIS[(Managed Redis<br/>cache)]
     F3 --> EGC[Event Grid<br/>evento custom]
@@ -54,12 +54,13 @@ flowchart LR
 
 | Componente | Servizio | Ruolo |
 |---|---|---|
-| Ingestion | Blob Storage, Event Grid, Azure Functions (Flex Consumption) | Ogni PDF caricato diventa un messaggio sul topic, con i metadati ricavati dal percorso |
+| Ingestion | Blob Storage, Event Grid, Function App `ingest` (Flex Consumption) | Ogni PDF caricato diventa un messaggio sul topic, con i metadati ricavati dal percorso |
+| Catalogo | Function App `catalog` (Flex Consumption), PostgreSQL | Quali manuali esistono per ogni prodotto e se sono già interrogabili |
 | Smistamento | Service Bus (topic + 2 subscription) | Indicizzazione e catalogo ricevono ognuno la propria copia; duplicate detection e dead-letter |
 | Indicizzazione | Container Apps con scaling KEDA sulla coda, Foundry | PDF → chunk → embedding; zero repliche quando non c'è lavoro |
 | Manuali | Cosmos DB for NoSQL (serverless) | Chunk con vector index; partition key gerarchica dominio → documento |
 | Dati dal campo | PostgreSQL Flexible Server + pgvector | Clienti, impianti, interventi e catalogo; ricerca di guasti simili con filtri relazionali |
-| Reazione alle modifiche | Change feed di Cosmos → Function | Quando un documento è completo (manifest scritto per ultimo dal worker): catalogo aggiornato, cache invalidata, un evento `RegDoc.Document.Indexed` per altri sistemi |
+| Reazione alle modifiche | Change feed di Cosmos → Function App `catalog` | Quando un documento è completo (manifest scritto per ultimo dal worker): catalogo aggiornato, cache invalidata, un evento `RegDoc.Document.Indexed` per altri sistemi |
 | Risposte | App Service (container), Foundry (`gpt-4.1-mini`) | API e interfaccia web, RAG con citazioni |
 | Cache | Azure Managed Redis (RediSearch) | Cache esatta e semantica con indice vettoriale |
 | Configurazione e osservabilità | App Configuration, Application Insights (OpenTelemetry) | Feature flag con refresh, tracce distribuite |
@@ -74,7 +75,9 @@ versione nel [changelog](CHANGELOG.md).
   password sono **disattivate** su Storage, Service Bus, Event Grid, Cosmos DB, Foundry, Redis, App
   Configuration, Application Insights e PostgreSQL.
 - **Minimo privilegio**: ogni identità ha solo i ruoli che le servono, sull'ambito più stretto (un container,
-  una subscription, una tabella). L'API legge e basta; la Function scrive solo il catalogo.
+  una subscription, una tabella). L'API legge e basta. Le funzioni stanno in due Function App con identità
+  separate: `ingest`, che riceve gli eventi sui file caricati, può solo leggere i blob e inviare sul topic;
+  `catalog` scrive solo il catalogo e pubblica l'evento custom.
 - **Repo pubblico**: nessun ID, nome di tenant, IP o email nei file; i valori personali arrivano come
   parametri al deploy da un file locale non tracciato.
 
@@ -120,7 +123,7 @@ repliche). Per azzerare i costi tra una sessione e l'altra:
 
 | Cartella | Contenuto |
 |---|---|
-| `src/functions` | Function App, una cartella per funzione: `blob_created/`, `catalog/`, `changefeed/` |
+| `src/functions` | Due Function App, una cartella per funzione: `ingest/` (`blob_created/`) e `catalog/` (`document_uploaded/`, `changefeed/`) |
 | `src/worker` | Indicizzatore su Container Apps |
 | `src/api` | API FastAPI e interfaccia web |
 | `src/fielddata` | Accesso a PostgreSQL: impianti, interventi, catalogo, ricerca vettoriale |

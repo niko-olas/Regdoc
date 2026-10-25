@@ -35,7 +35,8 @@ param configurePostgresAdmin bool = true
 // --- Nomi ---------------------------------------------------------------------------------------
 var acrName = 'acrregdoc${suffix}'
 var storageName = 'stregdoc${suffix}'
-var funcStorageName = 'stregdocfn${suffix}'
+var funcIngestStorageName = 'stregdocfning${suffix}'
+var funcCatalogStorageName = 'stregdocfncat${suffix}'
 var sbName = 'sb-regdoc-${suffix}'
 var cosmosName = 'cosmos-regdoc-${suffix}'
 var foundryName = 'ais-regdoc-${suffix}'
@@ -43,7 +44,8 @@ var pgName = 'psql-regdoc-${suffix}-ne'
 var redisName = 'redis-regdoc-${suffix}'
 var appConfigName = 'appcs-regdoc-${suffix}'
 var webAppName = 'app-regdoc-api-${suffix}'
-var funcAppName = 'func-regdoc-ingest-${suffix}'
+var funcIngestName = 'func-regdoc-ingest-${suffix}'
+var funcCatalogName = 'func-regdoc-catalog-${suffix}'
 var egCustomTopicName = 'evgt-regdoc-indexed-${suffix}'
 
 // Ruoli built-in (ID uguali in ogni tenant).
@@ -355,77 +357,50 @@ resource scalerId 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' 
   location: location
 }
 
-// --- Function App (F1-F3): blob_created, catalog, changefeed (src/functions) --------------------
-resource funcStorage 'Microsoft.Storage/storageAccounts@2025-01-01' = {
-  name: funcStorageName
-  location: location
-  kind: 'StorageV2'
-  sku: { name: 'Standard_LRS' }
-  properties: {
-    accessTier: 'Hot'
-    allowSharedKeyAccess: false
-    allowBlobPublicAccess: false
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
+// --- Function App (F1-F3): due app, una identità ciascuna -------------------------------------------
+// Separate per il minimo privilegio: ingest riceve eventi su file caricati da fuori e ha solo lettura
+// dei blob e invio sul topic; PostgreSQL, Cosmos, Event Grid e Redis restano all'identità di catalog.
+
+// ingest: on_blob_created (src/functions/ingest).
+module funcIngest 'modules/function-app.bicep' = {
+  name: 'func-ingest'
+  params: {
+    name: funcIngestName
+    storageName: funcIngestStorageName
+    planName: 'plan-regdoc-func-ingest'
+    location: location
+    appInsightsConnectionString: appInsights.properties.ConnectionString
+    maximumInstanceCount: 10
+    appSettings: [
+      { name: 'SERVICEBUS_FQDN', value: '${sb.name}.servicebus.windows.net' }
+      { name: 'SERVICEBUS_TOPIC', value: sbTopic.name }
+    ]
   }
 }
 
-resource funcBlobService 'Microsoft.Storage/storageAccounts/blobServices@2025-01-01' = {
-  parent: funcStorage
-  name: 'default'
-}
-
-resource funcPackages 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-01-01' = {
-  parent: funcBlobService
-  name: 'app-package'
-}
-
-resource funcPlan 'Microsoft.Web/serverfarms@2024-11-01' = {
-  name: 'plan-regdoc-func'
-  location: location
-  kind: 'functionapp'
-  sku: { name: 'FC1', tier: 'FlexConsumption' }
-  properties: { reserved: true }
-}
-
-resource funcApp 'Microsoft.Web/sites@2024-11-01' = {
-  name: funcAppName
-  location: location
-  kind: 'functionapp,linux'
-  identity: { type: 'SystemAssigned' }
-  properties: {
-    serverFarmId: funcPlan.id
-    httpsOnly: true
-    functionAppConfig: {
-      deployment: {
-        storage: {
-          type: 'blobContainer'
-          value: '${funcStorage.properties.primaryEndpoints.blob}app-package'
-          authentication: { type: 'SystemAssignedIdentity' }
-        }
-      }
-      scaleAndConcurrency: { maximumInstanceCount: 10, instanceMemoryMB: 2048 }
-      runtime: { name: 'python', version: '3.12' }
-    }
-    siteConfig: {
-      minTlsVersion: '1.2'
-      appSettings: [
-        // Storage dell'host con identità: nessuna connection string.
-        { name: 'AzureWebJobsStorage__accountName', value: funcStorage.name }
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
-        { name: 'APPLICATIONINSIGHTS_AUTHENTICATION_STRING', value: 'Authorization=AAD' }
-        { name: 'SERVICEBUS_FQDN', value: '${sb.name}.servicebus.windows.net' }
-        { name: 'SERVICEBUS_TOPIC', value: sbTopic.name }
-        // Trigger Service Bus con identità: il suffisso __fullyQualifiedNamespace sostituisce la connection string.
-        { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: '${sb.name}.servicebus.windows.net' }
-        { name: 'PGHOST', value: pg.properties.fullyQualifiedDomainName }
-        // Ruolo PostgreSQL della managed identity: può scrivere solo il catalogo (grant_app_role.py catalog).
-        { name: 'PGUSER', value: funcAppName }
-        { name: 'CosmosDB__accountEndpoint', value: cosmos.properties.documentEndpoint }
-        { name: 'EVENTGRID_TOPIC_ENDPOINT', value: egCustomTopic.properties.endpoint }
-        { name: 'REDIS_HOST', value: redis.properties.hostName }
-      ]
-    }
+// catalog: on_document_uploaded e on_chunks_changed (src/functions/catalog).
+module funcCatalog 'modules/function-app.bicep' = {
+  name: 'func-catalog'
+  params: {
+    name: funcCatalogName
+    storageName: funcCatalogStorageName
+    planName: 'plan-regdoc-func-catalog'
+    location: location
+    appInsightsConnectionString: appInsights.properties.ConnectionString
+    // Ogni invocazione apre una connessione a PostgreSQL (B1ms: 50, di cui 15 riservate). 2 istanze per
+    // 4 messaggi contemporanei (host.json) più il change feed stanno sotto le ~10 connessioni; i caricamenti
+    // sono rari e quelli in più aspettano nella subscription invece di saturare il database.
+    maximumInstanceCount: 2
+    appSettings: [
+      // Trigger Service Bus con identità: il suffisso __fullyQualifiedNamespace sostituisce la connection string.
+      { name: 'ServiceBusConnection__fullyQualifiedNamespace', value: '${sb.name}.servicebus.windows.net' }
+      { name: 'PGHOST', value: pg.properties.fullyQualifiedDomainName }
+      // Ruolo PostgreSQL della managed identity: può scrivere solo il catalogo (grant_app_role.py catalog).
+      { name: 'PGUSER', value: funcCatalogName }
+      { name: 'CosmosDB__accountEndpoint', value: cosmos.properties.documentEndpoint }
+      { name: 'EVENTGRID_TOPIC_ENDPOINT', value: egCustomTopic.properties.endpoint }
+      { name: 'REDIS_HOST', value: redis.properties.hostName }
+    ]
   }
 }
 
@@ -447,7 +422,7 @@ resource egToFunction 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2025-
     destination: {
       endpointType: 'AzureFunction'
       properties: {
-        resourceId: '${funcApp.id}/functions/on_blob_created'
+        resourceId: '${funcIngest.outputs.id}/functions/on_blob_created'
         maxEventsPerBatch: 1
         preferredBatchSizeInKilobytes: 64
       }
@@ -643,41 +618,40 @@ resource webMetrics 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   properties: { roleDefinitionId: roleId(roles.metricsPublisher), principalId: webApp.identity.principalId, principalType: 'ServicePrincipal' }
 }
 
-// Function App
-resource funcHostBlob 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(funcStorage.id, funcApp.id, roles.blobOwner)
-  scope: funcStorage
-  properties: { roleDefinitionId: roleId(roles.blobOwner), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
-}
-resource funcHostTable 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(funcStorage.id, funcApp.id, roles.tableContributor)
-  scope: funcStorage
-  properties: { roleDefinitionId: roleId(roles.tableContributor), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
-}
-resource funcDocsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(documentsContainer.id, funcApp.id, roles.blobReader)
+// Function App ingest: legge i metadati del blob e pubblica sul topic. I ruoli sul suo storage
+// dell'host sono nel modulo function-app.bicep.
+resource ingestDocsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(documentsContainer.id, funcIngestName, roles.blobReader)
   scope: documentsContainer
-  properties: { roleDefinitionId: roleId(roles.blobReader), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
+  properties: { roleDefinitionId: roleId(roles.blobReader), principalId: funcIngest.outputs.principalId, principalType: 'ServicePrincipal' }
 }
-resource funcSbCatalog 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(sbCatalog.id, funcApp.id, roles.sbReceiver)
-  scope: sbCatalog
-  properties: { roleDefinitionId: roleId(roles.sbReceiver), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
-}
-resource funcSbSender 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(sbTopic.id, funcApp.id, roles.sbSender)
+resource ingestSbSender 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(sbTopic.id, funcIngestName, roles.sbSender)
   scope: sbTopic
-  properties: { roleDefinitionId: roleId(roles.sbSender), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
+  properties: { roleDefinitionId: roleId(roles.sbSender), principalId: funcIngest.outputs.principalId, principalType: 'ServicePrincipal' }
 }
-resource funcEgSender 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(egCustomTopic.id, funcApp.id, roles.egSender)
-  scope: egCustomTopic
-  properties: { roleDefinitionId: roleId(roles.egSender), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
-}
-resource funcMetrics 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appInsights.id, funcApp.id, roles.metricsPublisher)
+resource ingestMetrics 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appInsights.id, funcIngestName, roles.metricsPublisher)
   scope: appInsights
-  properties: { roleDefinitionId: roleId(roles.metricsPublisher), principalId: funcApp.identity.principalId, principalType: 'ServicePrincipal' }
+  properties: { roleDefinitionId: roleId(roles.metricsPublisher), principalId: funcIngest.outputs.principalId, principalType: 'ServicePrincipal' }
+}
+
+// Function App catalog: riceve dalla subscription catalog e pubblica l'evento custom. PostgreSQL
+// (grant_app_role.py), Cosmos e Redis hanno i loro ruoli di data plane più sotto.
+resource catalogSbReceiver 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(sbCatalog.id, funcCatalogName, roles.sbReceiver)
+  scope: sbCatalog
+  properties: { roleDefinitionId: roleId(roles.sbReceiver), principalId: funcCatalog.outputs.principalId, principalType: 'ServicePrincipal' }
+}
+resource catalogEgSender 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(egCustomTopic.id, funcCatalogName, roles.egSender)
+  scope: egCustomTopic
+  properties: { roleDefinitionId: roleId(roles.egSender), principalId: funcCatalog.outputs.principalId, principalType: 'ServicePrincipal' }
+}
+resource catalogMetrics 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appInsights.id, funcCatalogName, roles.metricsPublisher)
+  scope: appInsights
+  properties: { roleDefinitionId: roleId(roles.metricsPublisher), principalId: funcCatalog.outputs.principalId, principalType: 'ServicePrincipal' }
 }
 
 // Worker e scaler KEDA
@@ -753,20 +727,20 @@ resource userAppConfig 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 // Cosmos: Built-in Data Reader (…0001) e Data Contributor (…0002) sul percorso più stretto possibile.
 resource cosmosFuncLeases 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-04-15' = {
   parent: cosmos
-  name: guid(cosmos.id, 'func', 'leases')
+  name: guid(cosmos.id, 'func-catalog', 'leases')
   properties: {
     roleDefinitionId: '${cosmos.id}/sqlRoleDefinitions/${cosmosContributor}' // segnalibri del change feed
-    principalId: funcApp.identity.principalId
+    principalId: funcCatalog.outputs.principalId
     scope: '${cosmos.id}/dbs/regdoc/colls/leases'
   }
   dependsOn: [ cosmosDb ]
 }
 resource cosmosFuncChunks 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2025-04-15' = {
   parent: cosmos
-  name: guid(cosmos.id, 'func', 'chunks')
+  name: guid(cosmos.id, 'func-catalog', 'chunks')
   properties: {
     roleDefinitionId: '${cosmos.id}/sqlRoleDefinitions/${cosmosReader}' // lettura del change feed
-    principalId: funcApp.identity.principalId
+    principalId: funcCatalog.outputs.principalId
     scope: '${cosmos.id}/dbs/regdoc/colls/chunks'
   }
   dependsOn: [ cosmosFuncLeases ] // Cosmos accetta una modifica RBAC alla volta
@@ -811,8 +785,8 @@ resource redisWeb 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssignm
 }
 resource redisFunc 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssignments@2025-07-01' = {
   parent: redisDb
-  name: 'funcapp'
-  properties: { accessPolicyName: 'default', user: { objectId: funcApp.identity.principalId } }
+  name: 'funccatalog'
+  properties: { accessPolicyName: 'default', user: { objectId: funcCatalog.outputs.principalId } }
   dependsOn: [ redisWeb ]
 }
 resource redisUser 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssignments@2025-07-01' = {
@@ -826,7 +800,8 @@ resource redisUser 'Microsoft.Cache/redisEnterprise/databases/accessPolicyAssign
 output acrName string = acr.name
 output webAppName string = webApp.name
 output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
-output funcAppName string = funcApp.name
+output funcIngestName string = funcIngest.outputs.name
+output funcCatalogName string = funcCatalog.outputs.name
 output appConfigEndpoint string = appConfig.properties.endpoint
 output pgHost string = pg.properties.fullyQualifiedDomainName
 output storageName string = storage.name

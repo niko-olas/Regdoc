@@ -72,7 +72,7 @@ func start                                                    # Azurite deve ess
 ## 6. Creazione e configurazione su Azure
 
 ```powershell
-az functionapp create --resource-group $RG --name $FUNCAPP --storage-account $FUNC_STORAGE `
+az functionapp create --resource-group $RG --name $FUNCAPP_INGEST --storage-account $FUNC_INGEST_STORAGE `
   --flexconsumption-location $LOCATION --runtime python --runtime-version 3.12 `
   --maximum-instance-count 10 --deployment-storage-auth-type SystemAssignedIdentity
 ```
@@ -81,9 +81,9 @@ az functionapp create --resource-group $RG --name $FUNCAPP --storage-account $FU
 - **Sorpresa**: anche con le chiavi disattivate sullo storage, la CLI scrive `AzureWebJobsStorage` come connection string **con `AccountKey`**. Non funzionerebbe ed è un segreto in configurazione → va sostituita:
 
 ```powershell
-az functionapp config appsettings delete --resource-group $RG --name $FUNCAPP --setting-names AzureWebJobsStorage
-az functionapp config appsettings set --resource-group $RG --name $FUNCAPP --settings `
-  "AzureWebJobsStorage__accountName=$FUNC_STORAGE" "SERVICEBUS_FQDN=<namespace>.servicebus.windows.net" "SERVICEBUS_TOPIC=documents"
+az functionapp config appsettings delete --resource-group $RG --name $FUNCAPP_INGEST --setting-names AzureWebJobsStorage
+az functionapp config appsettings set --resource-group $RG --name $FUNCAPP_INGEST --settings `
+  "AzureWebJobsStorage__accountName=$FUNC_INGEST_STORAGE" "SERVICEBUS_FQDN=<namespace>.servicebus.windows.net" "SERVICEBUS_TOPIC=documents"
 ```
 
 - Il **doppio underscore** `__` = proprietà annidata (`AzureWebJobsStorage:accountName`). Solo il nome dell'account, nessuna chiave → l'host usa la managed identity.
@@ -103,11 +103,26 @@ Scope come sotto-risorsa: `.../storageAccounts/<sa>/blobServices/default/contain
 ### Deploy
 
 ```powershell
-cd src\functions
-func azure functionapp publish $FUNCAPP
+cd src\functions\ingest
+func azure functionapp publish $FUNCAPP_INGEST
 ```
 
 Zip della cartella (meno `.funcignore`), caricato nel container di deploy, **build remota** su Linux che installa `requirements.txt`.
+
+### Due Function App (dal 2026-10-25)
+
+Le funzioni di RegDoc sono in due Function App: `ingest` (`on_blob_created`) e `catalog` (`on_document_uploaded`, `on_chunks_changed`). Tutte le funzioni di un'app condividono **identità, app settings, piano e deploy**: separare le app è il modo di dare permessi diversi a funzioni diverse.
+
+| | ingest | catalog |
+|---|---|---|
+| Cartella (radice di `func publish`) | `src/functions/ingest` | `src/functions/catalog` |
+| Ruoli applicativi | Blob Data Reader su `documents`, Service Bus Data Sender sul topic | Service Bus Data Receiver su `catalog`, PostgreSQL (catalogo), Cosmos (chunks/leases), EventGrid Data Sender, Redis |
+| `maximumInstanceCount` | 10 | 2 (connessioni a PostgreSQL), con `maxConcurrentCalls: 4` in `host.json` |
+
+- **Flex Consumption: una sola app per piano** → due piani (costo zero a riposo).
+- **Uno storage dell'host per app**: con uno storage condiviso ogni identità avrebbe Blob Owner su chiavi e pacchetti dell'altra. In più, due app che condividono lo storage e hanno i primi **32 caratteri** del nome uguali vanno in conflitto sull'**host ID**.
+- Una cartella per app, ognuna con `function_app.py`, `host.json`, `requirements.txt`: ogni app installa solo le sue dipendenze.
+- In locale, per provarle insieme: due `func start`, la seconda con `--port 7072`.
 
 ## 7. Collegamento con Event Grid
 
@@ -167,6 +182,10 @@ traces
 | App setting modificata | L'app si riavvia; `local.settings.json` letto solo all'avvio |
 | Log mancanti sotto carico | Sampling di Application Insights (`host.json`) |
 | La funzione non viene invocata | Metriche Event Grid: `MatchedEventCount` (filtri) e `DeliverySuccessCount` / `DeliveryAttemptFailCount` |
+| Permessi diversi per funzioni diverse | Function App separate: le funzioni di un'app condividono l'identità |
+| Due app Flex Consumption nello stesso piano | Non si può: un'app per piano |
+| Due app sullo stesso storage dell'host si disturbano | Host ID collision: nomi uguali nei primi 32 caratteri (o storage separati) |
+| Limitare il carico su un database a valle | `maximumInstanceCount` dell'app + concorrenza per istanza in `host.json` |
 
 ## Domande di ripasso
 
@@ -179,3 +198,4 @@ traces
 7. Su quale scope hai assegnato *Storage Blob Data Reader*, e perché non sull'intero storage account?
 8. Un `.txt` caricato in `documents` invoca la Function? Dove lo verifichi?
 9. Dove guardi i log di un'esecuzione di ieri? E quelli di un'esecuzione che stai per lanciare?
+10. Perché `on_blob_created` sta in una Function App diversa da `on_document_uploaded`, e perché la app catalog ha al massimo 2 istanze?

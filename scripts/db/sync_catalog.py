@@ -19,8 +19,8 @@ from azure.cosmos import CosmosClient  # noqa: E402
 from azure.identity import DefaultAzureCredential  # noqa: E402
 from azure.storage.blob import ContainerClient  # noqa: E402
 
-from functions.blob_created.documents import CONTAINER, InvalidBlobPath, parse_subject  # noqa: E402
-from functions.catalog.store import UPSERT_INDEXED, UPSERT_UPLOAD, indexed_record, upload_record  # noqa: E402
+from functions.ingest.blob_created.documents import CONTAINER, InvalidBlobPath, parse_subject  # noqa: E402
+from functions.catalog.catalog_store import UPSERT_INDEXED, UPSERT_UPLOAD, indexed_record, upload_record  # noqa: E402
 from fielddata.db import connect  # noqa: E402
 
 

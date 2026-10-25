@@ -1,7 +1,7 @@
 # Recap 03 — Soluzioni basate su eventi e messaggi
 
 Dominio d'esame: **3. Connessione e utilizzo dei servizi Azure (20–25%)** → *Soluzioni basate su eventi e messaggi*.
-Svolto il 2026-10-19/21 (F1). Componenti: storage `documents`, Event Grid, Service Bus, Function App `src/functions` (`blob_created/` e `catalog/`: `on_blob_created` e `on_document_uploaded`).
+Svolto il 2026-10-19/21 (F1). Componenti: storage `documents`, Event Grid, Service Bus, Function App `src/functions/ingest` (`on_blob_created`) e `src/functions/catalog` (`on_document_uploaded`).
 
 | Skill | Stato |
 |---|---|

@@ -1,4 +1,4 @@
-from functions.changefeed.indexed_events import KIND_MANIFEST, summarize_changes
+from functions.catalog.changefeed.indexed_events import KIND_MANIFEST, summarize_changes
 from shared.models import KIND_MANIFEST as SHARED_KIND_MANIFEST
 
 
