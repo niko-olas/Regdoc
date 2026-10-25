@@ -26,19 +26,19 @@ I tecnici caricano i documenti **direttamente in Blob** (nessun endpoint di uplo
 Estrazione del testo dai PDF con `pypdf`; Document Intelligence eventualmente più avanti.
 
 **Catalogo dei documenti (F1–F3)**
-Subscription `catalog` → funzione `on_document_uploaded` (trigger Service Bus) → tabella `documents` su PostgreSQL. Il change feed segna il documento come indicizzato. L'API mostra al tecnico quali manuali esistono per il suo impianto e se sono già interrogabili; chi gestisce i documenti vede quelli rimasti bloccati.
+Subscription `catalog` → funzione `on_document_uploaded` (trigger Service Bus) → tabella `documents` su PostgreSQL. Il change feed segna il documento come indicizzato. L'API mostra al tecnico quali manuali esistono per il prodotto e se sono già interrogabili; chi gestisce i documenti vede quelli rimasti bloccati.
 
 **Indicizzazione dei manuali (F2)**
-Subscription `indexer` → worker Python su Container Apps (scaling KEDA sulla coda) → chunk + embedding con Foundry → **Cosmos DB for NoSQL** (container `chunks`, partition key gerarchica `domain`/`document_id`, vector index). Il worker scrive dietro l'interfaccia `VectorStore`.
+Subscription `indexer` → worker Python su Container Apps (scaling KEDA sulla coda) → chunk + embedding con Foundry → **Cosmos DB for NoSQL** (container `chunks`, partition key gerarchica `domain`/`document_id`, vector index). Il worker scrive dietro l'interfaccia `VectorStore`: prima i chunk, per ultimo un **manifest** (`kind: "manifest"`, numero di chunk e pagine) nella stessa partizione logica, che segnala il documento completo.
 
 **Dati dal campo (F3)**
 **PostgreSQL Flexible Server con pgvector**: schema relazionale clienti → impianti → interventi; embedding delle note d'intervento per trovare guasti simili già risolti, con filtri relazionali (stesso modello, stesso dominio). In un'azienda questi dati arriverebbero dal gestionale (CRM/ERP); nel progetto li carica uno script di import con dati di esempio anonimi.
 
 **Reazione alle modifiche (F2–F3)**
-Change feed di `chunks` → funzione `on_chunks_changed` (trigger Cosmos DB) → evento custom `RegDoc.Document.Indexed` su Event Grid, documento indicizzato nel catalogo, invalidazione delle risposte in cache su Azure Managed Redis.
+Change feed di `chunks` → funzione `on_chunks_changed` (trigger Cosmos DB), che reagisce solo ai manifest (i chunk di un manuale arrivano in più lotti) → evento custom `RegDoc.Document.Indexed` su Event Grid, documento indicizzato nel catalogo, invalidazione delle risposte in cache su Azure Managed Redis.
 
 **Query (F4)**
-API in container su App Service, con interfaccia web per i tecnici. Per una domanda: impianto (PostgreSQL) → pagine del manuale del modello (Cosmos) + interventi simili (pgvector) → risposta con citazioni (documento, pagina, intervento). Risposte in cache su Redis (esatta e semantica). I **feature flag in App Configuration** attivano a runtime la cache semantica e l'uso degli interventi nelle risposte. AKS non ha un ruolo nel prodotto: si studia con un esperimento separato.
+API in container su App Service, con interfaccia web per i tecnici. Il tecnico sceglie il prodotto (dominio, marca, modello), mai il cliente. Per una domanda: pagine dei manuali del modello (Cosmos) + interventi simili sullo stesso modello (pgvector) → risposta con citazioni (documento, pagina, intervento). La matricola è facoltativa (solo API): aggiunge lo storico di quell'impianto (PostgreSQL). Nel prompt e in cache nessun dato dei clienti. Risposte in cache su Redis (esatta e semantica). I **feature flag in App Configuration** attivano a runtime la cache semantica e l'uso degli interventi nelle risposte. AKS non ha un ruolo nel prodotto: si studia con un esperimento separato.
 
 **Trasversali (F5)**
 App Configuration (config e feature flag), OpenTelemetry → Application Insights. L'app non ha segreti (solo managed identity): Key Vault si studia con un esperimento separato.

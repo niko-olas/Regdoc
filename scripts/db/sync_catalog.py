@@ -43,9 +43,10 @@ def main() -> None:
         .get_database_client("regdoc")
         .get_container_client("chunks")
     )
-    # Un documento con almeno un chunk su Cosmos è interrogabile dall'API.
+    # Un documento è indicizzato quando ha il manifest, che il worker scrive per ultimo. La query resta
+    # cross-partition ma legge un item per documento, non tutti i chunk come un SELECT DISTINCT.
     indexed = list(chunks.query_items(
-        "SELECT DISTINCT c.blob_path, c.domain, c.manufacturer, c.model, c.doc_type FROM c",
+        "SELECT c.blob_path, c.domain, c.manufacturer, c.model, c.doc_type FROM c WHERE c.kind = 'manifest'",
         enable_cross_partition_query=True,
     ))
     now = datetime.now(timezone.utc)

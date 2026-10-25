@@ -14,6 +14,48 @@ Formato di una voce:
 
 ---
 
+## 2026-10-25 — Manifest per documento: "indicizzato" solo quando è completo
+
+**Decisione**: dopo i chunk e la cancellazione di quelli in eccesso, il worker scrive per ultimo un item
+`{document_id}-manifest` (`kind: "manifest"`, `chunk_count`, `pages`, `source_etag`) nella stessa partizione
+logica `[domain, document_id]`. `on_chunks_changed` reagisce solo ai manifest: un evento `RegDoc.Document.Indexed`,
+un `indexed_at` e un'invalidazione della cache per documento completo. La ricerca filtra `c.kind = 'chunk'`;
+`sync_catalog.py` legge i manifest invece di un `SELECT DISTINCT` su tutti i chunk.
+
+**Alternative scartate**: transactional batch (atomico solo per batch: 100 operazioni e ~1,2 MB nell'SDK Python,
+~34 chunk con embedding, quindi un manuale da 106 chunk resta diviso in 4 batch); il worker che pubblica l'evento
+e scrive il catalogo a fine lavoro (dual write: se Event Grid fallisce dopo Cosmos lo stato diverge, e tre
+dipendenze in più nel componente più critico); la funzione che conta i chunk fino al totale atteso (stato tra
+un lotto e l'altro, e il totale deve comunque arrivare da qualche parte); attendere N secondi senza modifiche
+(valore arbitrario).
+
+**Motivo**: il change feed consegna un manuale in più lotti (massimo 100 item per invocazione) e ogni lotto
+risultava "documento indicizzato", il primo su un documento incompleto. L'ordine del change feed è garantito
+solo dentro una partizione logica: il manifest scritto per ultimo nella partizione dei suoi chunk arriva sempre
+dopo di loro. Limite noto: durante la riscrittura (~2 s) la ricerca può vedere chunk vecchi e nuovi insieme.
+
+**Fase / skill**: F2 — Cosmos DB (change feed, partition key gerarchica, transactional batch, RU delle query
+cross-partition); Event Grid (eventi custom).
+
+## 2026-10-24 — Domande per prodotto, nessun dato dei clienti fuori da PostgreSQL
+
+**Decisione**: il tecnico sceglie il prodotto (dominio, marca, modello) invece dell'impianto; l'API espone
+`/products` e i manuali per modello, non più l'elenco degli impianti con i clienti (`/installations` rimosso).
+La matricola resta facoltativa in `/ask` (storico del singolo impianto). Prompt e risposte in cache non contengono
+nome né città del cliente; `RESPONSE_FORMAT` portato a 3.
+
+**Alternative scartate**: scelta per impianto (il tecnico ha bisogno del prodotto, non di sapere dove è
+installato; l'elenco dei clienti era visibile a chiunque aprisse l'interfaccia); tenere i dati del cliente in
+risposta e riattaccarli freschi a ogni hit (l'interfaccia non li usava); città come contesto del prompt (un dato
+tecnico come l'altitudine va tra gli attributi dell'impianto).
+
+**Motivo**: minimizzazione dei dati: il prompt esce dall'app (Foundry, abuse monitoring) e le risposte restano in
+Redis 24 ore. L'esperienza dal campo resta (interventi simili sullo stesso modello); senza la matricola nella
+chiave, la cache è condivisa tra tutti i tecnici per lo stesso modello. Corregge anche un bug: un hit esatto
+restituiva i dati del cliente letti dalla cache.
+
+**Fase / skill**: F3, F4 — PostgreSQL (query sul catalogo); Azure Managed Redis (chiavi e formato della cache).
+
 ## 2026-10-23 — Infrastruttura in Bicep, ambiente effimero
 
 **Decisione**: tutta l'infrastruttura in `infra/main.bicep`; `scripts/deploy/up.ps1` crea l'ambiente da zero

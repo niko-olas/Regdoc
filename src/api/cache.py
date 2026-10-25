@@ -36,7 +36,7 @@ SEMANTIC_MAX_DISTANCE = 0.06
 DIMENSIONS = 1536
 # Versione del formato della risposta: cambiarla rende irraggiungibili le risposte salvate con il
 # formato precedente, come fa la versione dei manuali per i contenuti.
-RESPONSE_FORMAT = 2
+RESPONSE_FORMAT = 3
 
 
 def scope_of(domain: str, manufacturer: str | None, model: str | None, use_interventions: bool,

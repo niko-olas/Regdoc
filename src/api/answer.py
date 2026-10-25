@@ -47,11 +47,13 @@ def build_user_message(question: str, installation: Installation | None, history
                        manuals: list[ManualPage], similar: list[SimilarIntervention]) -> str:
     parts = []
     if installation:
-        attrs = ", ".join(f"{k}={v}" for k, v in installation.attributes.items())
-        parts.append(
-            f"IMPIANTO: {installation.manufacturer} {installation.model} (matricola {installation.serial_number}, "
-            f"installato il {installation.installed_on}, {attrs}) presso {installation.customer}, {installation.city}."
-        )
+        # Solo ciò che serve a rispondere: niente nome né città del cliente. Il prompt esce dall'app
+        # (Foundry) e la risposta finisce in cache: dati personali che non migliorano la risposta.
+        details = [f"matricola {installation.serial_number}"]
+        if installation.installed_on:
+            details.append(f"installato il {installation.installed_on}")
+        details += [f"{k}={v}" for k, v in installation.attributes.items()]
+        parts.append(f"IMPIANTO: {installation.manufacturer} {installation.model} ({', '.join(details)}).")
         if history:
             parts.append("STORICO DI QUESTO IMPIANTO (più recenti prima):")
             parts += [f"- {h.performed_on} {h.kind}: {h.symptom or ''} → {h.resolution}" for h in history]

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 from api import assistant  # noqa: E402
 from api.services import Services, get_services  # noqa: E402
 from fielddata.documents import documents_for_model  # noqa: E402
-from fielddata.installations import get_installation, list_installations  # noqa: E402
+from fielddata.products import list_products  # noqa: E402
 
 STATIC = pathlib.Path(__file__).parent / "static"
 
@@ -56,28 +56,19 @@ def home() -> FileResponse:
     return FileResponse(STATIC / "index.html")
 
 
-@app.get("/installations")
-def installations(svc: Services = Depends(get_services)) -> list[dict]:
+@app.get("/products")
+def products(svc: Services = Depends(get_services)) -> list[dict]:
+    # Il tecnico sceglie il prodotto, non il cliente: l'API non espone l'elenco dei clienti.
     with svc.pool.connection() as conn:
-        return [
-            {"serial_number": i.serial_number, "customer": i.customer, "city": i.city,
-             "manufacturer": i.manufacturer, "model": i.model, "domain": i.domain}
-            for i in list_installations(conn)
-        ]
+        return [p.__dict__ for p in list_products(conn)]
 
 
-@app.get("/installations/{serial_number}/documents")
-def installation_documents(serial_number: str, svc: Services = Depends(get_services)) -> dict:
-    """I manuali disponibili per il modello dell'impianto: il tecnico sa subito su cosa si basano le risposte."""
+@app.get("/products/{domain}/{manufacturer}/{model}/documents")
+def product_documents(domain: str, manufacturer: str, model: str, svc: Services = Depends(get_services)) -> dict:
+    """I manuali disponibili per il modello: il tecnico sa subito su cosa si basano le risposte."""
     with svc.pool.connection() as conn:
-        installation = get_installation(conn, serial_number)
-        if installation is None:
-            raise HTTPException(404, f"Impianto {serial_number} non trovato")
-        docs = documents_for_model(conn, installation.domain, installation.manufacturer, installation.model)
-    return {
-        "model": f"{installation.manufacturer} {installation.model}",
-        "documents": [d.__dict__ for d in docs],
-    }
+        docs = documents_for_model(conn, domain, manufacturer, model)
+    return {"model": f"{manufacturer} {model}", "documents": [d.__dict__ for d in docs]}
 
 
 @app.post("/ask")

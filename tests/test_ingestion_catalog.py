@@ -26,9 +26,10 @@ def test_un_messaggio_incompleto_e_rifiutato():
 
 
 def test_il_change_feed_e_il_caricamento_scrivono_la_stessa_riga():
-    chunks = [{"id": f"doc-{i:04d}", "domain": REF.domain, "document_id": "doc", "manufacturer": REF.manufacturer,
-               "model": REF.model, "doc_type": REF.doc_type, "blob_path": REF.blob_path} for i in range(3)]
-    [summary] = summarize_changes(chunks)
+    manifest = {"id": "doc-manifest", "kind": "manifest", "domain": REF.domain, "document_id": "doc",
+                "manufacturer": REF.manufacturer, "model": REF.model, "doc_type": REF.doc_type,
+                "blob_path": REF.blob_path, "chunk_count": 3, "pages": 2}
+    [summary] = summarize_changes([manifest])
     record = indexed_record(summary, NOW + timedelta(minutes=2))
     uploaded = upload_record(build_message("e", REF, "u", {}, None, 1, "t"), NOW)
     # Stessa chiave e stessi campi fissi: chi arriva per primo crea la riga, l'altro la completa.

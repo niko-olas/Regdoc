@@ -19,7 +19,7 @@ class CosmosVectorStore(VectorStore):
         # Ogni risposta di Cosmos riporta il costo dell'operazione in RU.
         return float(self._container.client_connection.last_response_headers.get("x-ms-request-charge", 0))
 
-    def replace_document(self, domain: str, document_id: str, chunks: list[Chunk]) -> dict:
+    def replace_document(self, domain: str, document_id: str, chunks: list[Chunk], manifest: dict) -> dict:
         # Partition key gerarchica completa: [domain, document_id]. Tutte le operazioni
         # di questo metodo restano dentro una sola partizione logica.
         pk = [domain, document_id]
@@ -40,12 +40,21 @@ class CosmosVectorStore(VectorStore):
             parameters=[{"name": "@domain", "value": domain}, {"name": "@document_id", "value": document_id}],
             partition_key=pk,
         )
-        keep = {chunk.id for chunk in chunks}
+        # Il manifest di un caricamento precedente non è un chunk in eccesso: viene sostituito qui sotto.
+        keep = {chunk.id for chunk in chunks} | {manifest["id"]}
         stale = [item["id"] for item in existing if item["id"] not in keep]
         ru += self._request_charge()
 
         for item_id in stale:
             self._container.delete_item(item=item_id, partition_key=pk)
             ru += self._request_charge()
+
+        # Manifest per ultimo e nella stessa partizione logica dei chunk: il change feed garantisce
+        # l'ordine solo dentro una partizione logica, quindi quando on_chunks_changed vede il manifest
+        # ha già ricevuto tutti i chunk. In un altro container (o con un'altra chiave) potrebbe
+        # arrivare prima. Il transactional batch non basta: 100 operazioni e ~1,2 MB per batch
+        # (~34 chunk con embedding), quindi un manuale resterebbe diviso in più batch.
+        self._container.upsert_item(manifest)
+        ru += self._request_charge()
 
         return {"store": self.name, "upserted": len(chunks), "deleted": len(stale), "ru": round(ru, 2)}

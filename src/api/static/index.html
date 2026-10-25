@@ -27,11 +27,11 @@
 <body>
 <main>
   <h1>RegDoc</h1>
-  <p class="sub">Domande tecniche sugli impianti: risposte dai manuali e dagli interventi già fatti.</p>
+  <p class="sub">Domande tecniche su un prodotto: risposte dai suoi manuali e dagli interventi già fatti sullo stesso modello.</p>
 
   <div class="card">
-    <label for="inst">Impianto</label>
-    <select id="inst"><option value="">Caricamento impianti…</option></select>
+    <label for="prod">Prodotto</label>
+    <select id="prod"><option value="">Caricamento prodotti…</option></select>
     <div id="docs" class="docs muted"></div>
     <label for="q">Domanda</label>
     <textarea id="q" placeholder="Es. la stufa va in allarme sonda fumi dopo mezz'ora, cosa controllo?"></textarea>
@@ -44,27 +44,35 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
-async function loadInstallations() {
+let products = [];
+const selected = () => products[$("prod").value];
+
+async function loadProducts() {
   try {
-    const res = await fetch("/installations");
+    const res = await fetch("/products");
     if (!res.ok) throw new Error(res.status);
-    const items = await res.json();
-    $("inst").innerHTML = items.map((i) =>
-      `<option value="${esc(i.serial_number)}">${esc(i.customer)} (${esc(i.city)}) · ${esc(i.manufacturer)} ${esc(i.model)} · ${esc(i.serial_number)}</option>`).join("");
+    products = await res.json();
+    // Un gruppo per dominio: oggi solo stufe-pellet, domani caldaie o altro.
+    const domains = [...new Set(products.map((p) => p.domain))];
+    $("prod").innerHTML = domains.map((d) => `<optgroup label="${esc(d)}">` + products
+      .map((p, n) => p.domain !== d ? "" :
+        `<option value="${n}">${esc(p.manufacturer)} ${esc(p.model)}${p.indexed_documents ? "" : " (senza manuali)"}</option>`)
+      .join("") + "</optgroup>").join("");
     loadDocuments();
   } catch (e) {
-    $("inst").innerHTML = `<option value="">Impianti non disponibili</option>`;
+    $("prod").innerHTML = `<option value="">Prodotti non disponibili</option>`;
   }
 }
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("it-IT") : "";
 
 async function loadDocuments() {
-  const serial = $("inst").value;
-  if (!serial) { $("docs").innerHTML = ""; return; }
+  const p = selected();
+  if (!p) { $("docs").innerHTML = ""; return; }
   $("docs").textContent = "Cerco i manuali…";
   try {
-    const res = await fetch(`/installations/${encodeURIComponent(serial)}/documents`);
+    const path = [p.domain, p.manufacturer, p.model].map(encodeURIComponent).join("/");
+    const res = await fetch(`/products/${path}/documents`);
     if (!res.ok) throw new Error(res.status);
     const body = await res.json();
     if (!body.documents.length) {
@@ -99,7 +107,8 @@ async function ask() {
   $("out").innerHTML = "";
   try {
     const res = await fetch("/ask", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, serial_number: $("inst").value || null }) });
+      body: JSON.stringify({ question, domain: selected()?.domain, manufacturer: selected()?.manufacturer,
+                             model: selected()?.model }) });
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || res.status);
     const cache = body.cache === "miss" ? "" : ` · dalla cache (${body.cache})`;
@@ -115,9 +124,9 @@ async function ask() {
 }
 
 $("ask").addEventListener("click", ask);
-$("inst").addEventListener("change", loadDocuments);
+$("prod").addEventListener("change", loadDocuments);
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) ask(); });
-loadInstallations();
+loadProducts();
 </script>
 </body>
 </html>

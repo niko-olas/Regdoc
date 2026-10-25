@@ -3,11 +3,12 @@ import json
 import pytest
 from pypdf import PdfWriter
 
-from shared.models import document_id_for
+from shared.models import KIND_CHUNK, KIND_MANIFEST, document_id_for, manifest_for
 from worker.chunking import build_chunks, split_text
 from worker.errors import InvalidDocument, InvalidMessage
 from worker.messages import parse_body
 from worker.pdf import extract_pages
+from worker.stores.cosmos import CosmosVectorStore
 
 BODY = {
     "event_id": "evt-1",
@@ -19,6 +20,7 @@ BODY = {
     "blob_path": "stufe-pellet/edilkamin/blade-h/uso-manutenzione/manuale.pdf",
     "blob_url": "https://example.blob.core.windows.net/documents/stufe-pellet/edilkamin/blade-h/uso-manutenzione/manuale.pdf",
     "attributes": {"potenza_kw": "12"},
+    "etag": "0x8DC0001",
 }
 
 
@@ -63,7 +65,53 @@ def test_build_chunks_id_deterministici_e_pagina():
     doc_id = document_id_for(BODY["blob_path"])
     assert [c.id for c in chunks] == [f"{doc_id}-0000", f"{doc_id}-0001"]
     assert [c.page for c in chunks] == [1, 3]
-    assert all(c.document_id == doc_id and c.domain == "stufe-pellet" for c in chunks)
+    assert all(c.document_id == doc_id and c.domain == "stufe-pellet" and c.kind == KIND_CHUNK for c in chunks)
+
+
+def test_manifest_nella_partizione_dei_chunk_con_conteggi_ed_etag():
+    request = parse_body(json.dumps(BODY))
+    chunks = build_chunks(request, [(1, "testo pagina uno"), (3, "testo pagina tre")])
+    manifest = manifest_for(chunks, request.etag)
+    doc_id = document_id_for(BODY["blob_path"])
+    assert manifest["id"] == f"{doc_id}-manifest" and manifest["kind"] == KIND_MANIFEST
+    # Stessa partition key [domain, document_id] dei chunk: è ciò che garantisce l'ordine nel change feed.
+    assert (manifest["domain"], manifest["document_id"]) == ("stufe-pellet", doc_id)
+    assert manifest["chunk_count"] == 2 and manifest["pages"] == 2 and manifest["source_etag"] == "0x8DC0001"
+
+
+class FakeContainer:
+    """Registra le operazioni nell'ordine in cui il worker le fa."""
+
+    def __init__(self, existing_ids):
+        self.existing_ids = existing_ids
+        self.ops = []
+        self.client_connection = type("Conn", (), {"last_response_headers": {"x-ms-request-charge": "1"}})()
+
+    def upsert_item(self, item):
+        self.ops.append(("upsert", item["id"]))
+
+    def query_items(self, query, parameters, partition_key):
+        return [{"id": i} for i in self.existing_ids]
+
+    def delete_item(self, item, partition_key):
+        self.ops.append(("delete", item))
+
+
+def test_store_cancella_i_chunk_in_piu_e_scrive_il_manifest_per_ultimo():
+    request = parse_body(json.dumps(BODY))
+    chunks = build_chunks(request, [(1, "uno"), (2, "due")])
+    manifest = manifest_for(chunks, request.etag)
+    doc_id = chunks[0].document_id
+    # Caricamento precedente più lungo: 3 chunk e il suo manifest.
+    container = FakeContainer([f"{doc_id}-0000", f"{doc_id}-0001", f"{doc_id}-0002", f"{doc_id}-manifest"])
+    store = CosmosVectorStore.__new__(CosmosVectorStore)
+    store._container = container
+
+    stats = store.replace_document("stufe-pellet", doc_id, chunks, manifest)
+
+    assert container.ops == [("upsert", f"{doc_id}-0000"), ("upsert", f"{doc_id}-0001"),
+                             ("delete", f"{doc_id}-0002"), ("upsert", f"{doc_id}-manifest")]
+    assert stats["upserted"] == 2 and stats["deleted"] == 1
 
 
 def test_extract_pages_rifiuta_file_non_pdf():

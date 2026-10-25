@@ -38,19 +38,6 @@ def get_installation(conn: psycopg.Connection, serial_number: str) -> Installati
     return Installation(*row) if row else None
 
 
-def list_installations(conn: psycopg.Connection, limit: int = 200) -> list[Installation]:
-    rows = conn.execute(
-        """
-        SELECT i.serial_number, i.domain, i.manufacturer, i.model, i.installed_on, c.name, c.city, i.attributes
-        FROM installations i JOIN customers c ON c.id = i.customer_id
-        ORDER BY c.name, i.serial_number
-        LIMIT %s
-        """,
-        (limit,),
-    ).fetchall()
-    return [Installation(*r) for r in rows]
-
-
 def history(conn: psycopg.Connection, serial_number: str, limit: int = 5) -> list[PastIntervention]:
     # Usa ix_interventions_installation (installation_id, performed_on DESC): niente sort.
     rows = conn.execute(

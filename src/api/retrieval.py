@@ -16,7 +16,8 @@ class ManualPage:
 def search_manuals(container: ContainerProxy, vector: list[float], *, domain: str, manufacturer: str | None,
                    model: str | None, k: int = 5) -> tuple[list[ManualPage], float]:
     """I chunk più vicini alla domanda, solo dei manuali dello stesso modello. Restituisce anche le RU."""
-    filters = ["c.domain = @domain"]
+    # Solo i chunk: nello stesso container ci sono i manifest dei documenti, che non hanno embedding.
+    filters = ["c.domain = @domain", "c.kind = 'chunk'"]
     params = [{"name": "@q", "value": vector}, {"name": "@domain", "value": domain}]
     if manufacturer:
         filters.append("c.manufacturer = @manufacturer")

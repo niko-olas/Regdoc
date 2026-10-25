@@ -1,6 +1,6 @@
 # RegDoc
 
-Assistente per **tecnici manutentori**: il tecnico sceglie l'impianto su cui sta lavorando, descrive il problema
+Assistente per **tecnici manutentori**: il tecnico sceglie il prodotto (marca e modello) su cui sta lavorando, descrive il problema
 e riceve una risposta pratica che combina **i manuali del produttore** con **l'esperienza dal campo**, cioè
 gli interventi già fatti su impianti dello stesso modello. Ogni affermazione cita la sua fonte: documento e
 pagina del manuale, oppure codice e data dell'intervento.
@@ -14,12 +14,14 @@ configurazione e i documenti, non con il codice.
 
 ## Cosa fa
 
-- **Domande in linguaggio naturale** su un impianto preciso (matricola): la risposta usa il manuale del suo
-  modello, lo storico dei suoi interventi e i guasti simili risolti su altri impianti uguali.
-- **Catalogo dei documenti**: per ogni impianto il tecnico vede quali manuali esistono e se sono già
+- **Domande in linguaggio naturale** su un prodotto: la risposta usa i manuali di quel modello e i guasti
+  simili già risolti su impianti uguali. Il tecnico non vede l'elenco dei clienti: gli serve il prodotto, non
+  dove è installato. L'API accetta anche la matricola di un impianto, per aggiungere lo storico dei suoi interventi.
+- **Catalogo dei documenti**: per ogni prodotto il tecnico vede quali manuali esistono e se sono già
   interrogabili; chi gestisce la documentazione vede i caricamenti rimasti bloccati.
 - **Indicizzazione automatica**: basta caricare un PDF nello storage, nel percorso
   `documents/{dominio}/{produttore}/{modello}/{tipo}/{file}.pdf`. Ricaricare un file lo reindicizza senza duplicati.
+  Il documento risulta indicizzato solo quando tutti i suoi chunk sono scritti.
 - **Cache delle risposte**: la stessa domanda (o una molto simile) ha risposta immediata; le risposte si
   invalidano da sole quando un manuale del dominio cambia.
 - **Feature flag a runtime**: interventi nelle risposte e cache semantica si attivano senza nuovo deploy.
@@ -57,7 +59,7 @@ flowchart LR
 | Indicizzazione | Container Apps con scaling KEDA sulla coda, Foundry | PDF → chunk → embedding; zero repliche quando non c'è lavoro |
 | Manuali | Cosmos DB for NoSQL (serverless) | Chunk con vector index; partition key gerarchica dominio → documento |
 | Dati dal campo | PostgreSQL Flexible Server + pgvector | Clienti, impianti, interventi e catalogo; ricerca di guasti simili con filtri relazionali |
-| Reazione alle modifiche | Change feed di Cosmos → Function | Catalogo aggiornato, cache invalidata, evento `RegDoc.Document.Indexed` per altri sistemi |
+| Reazione alle modifiche | Change feed di Cosmos → Function | Quando un documento è completo (manifest scritto per ultimo dal worker): catalogo aggiornato, cache invalidata, un evento `RegDoc.Document.Indexed` per altri sistemi |
 | Risposte | App Service (container), Foundry (`gpt-4.1-mini`) | API e interfaccia web, RAG con citazioni |
 | Cache | Azure Managed Redis (RediSearch) | Cache esatta e semantica con indice vettoriale |
 | Configurazione e osservabilità | App Configuration, Application Insights (OpenTelemetry) | Feature flag con refresh, tracce distribuite |
@@ -93,7 +95,7 @@ Copy-Item scripts\env.example.ps1 scripts\env.ps1
 # 3. crea tutto da zero: infrastruttura, immagini, Function, dati di esempio (30-40 minuti)
 .\scripts\deploy\up.ps1
 
-# 4. verifica: health, impianti, una domanda e la stessa domanda dalla cache
+# 4. verifica: health, prodotti, una domanda e la stessa domanda dalla cache
 .\scripts\deploy\smoke-test.ps1
 ```
 
@@ -133,6 +135,8 @@ repliche). Per azzerare i costi tra una sessione e l'altra:
   (Easy Auth) con Entra ID, limitata agli utenti dell'azienda.
 - **Rete**: accesso privato (VNet integration, private endpoint) al posto dell'accesso pubblico con firewall.
 - **Dati dal campo**: sostituire lo script di import con la sincronizzazione dal gestionale (CRM/ERP).
+  Le note degli interventi sono testo libero e possono contenere nomi: vanno pseudonimizzate all'import,
+  perché entrano nel prompt e nelle risposte in cache.
 
 ## Sviluppi possibili
 

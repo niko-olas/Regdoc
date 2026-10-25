@@ -17,6 +17,7 @@ class IndexRequest:
     blob_path: str
     blob_url: str
     attributes: dict[str, str]
+    etag: str | None = None
 
 
 def parse_body(raw: str) -> IndexRequest:
@@ -34,4 +35,5 @@ def parse_body(raw: str) -> IndexRequest:
     return IndexRequest(
         **{f: body[f] for f in REQUIRED_FIELDS},
         attributes=dict(body.get("attributes") or {}),
+        etag=body.get("etag"),
     )

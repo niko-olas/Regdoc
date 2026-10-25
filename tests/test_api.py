@@ -85,6 +85,40 @@ def test_ask_usa_impianto_manuali_e_interventi(monkeypatch):
     assert "[M1] karolina.pdf, pagina 12" in prompt and "[I1] INT-00145" in prompt and "EXT-KAR-00026" in prompt
 
 
+def test_il_prompt_non_contiene_i_dati_del_cliente(monkeypatch):
+    svc, _ = install_fakes(monkeypatch, {"use-interventions": True})
+    try:
+        client.post("/ask", json={"question": "allarme sonda fumi", "serial_number": "EXT-KAR-00026"})
+    finally:
+        app.dependency_overrides.clear()
+    prompt = svc._chat.messages[1]["content"]
+    assert "Famiglia Rossi" not in prompt and "Trento" not in prompt
+    assert "matricola EXT-KAR-00026, installato il 2020-01-01, potenza_kw=8" in prompt
+
+
+def test_la_risposta_salvata_in_cache_non_contiene_i_dati_del_cliente(monkeypatch):
+    svc, _ = install_fakes(monkeypatch, {"use-interventions": True})
+    stored = {}
+
+    class FakeCache:
+        def version(self, domain):
+            return 0
+
+        def get_exact(self, domain, ver, scope, question):
+            return None
+
+        def store(self, domain, ver, scope, question, vector, response):
+            stored.update(response)
+
+    svc.cache = FakeCache()
+    try:
+        client.post("/ask", json={"question": "allarme sonda fumi", "serial_number": "EXT-KAR-00026"})
+    finally:
+        app.dependency_overrides.clear()
+    assert stored["scope"]["serial_number"] == "EXT-KAR-00026"
+    assert "Famiglia Rossi" not in str(stored) and "Trento" not in str(stored)
+
+
 def test_feature_flag_disattiva_gli_interventi(monkeypatch):
     svc, calls = install_fakes(monkeypatch, {"use-interventions": False})
     try:
@@ -95,19 +129,43 @@ def test_feature_flag_disattiva_gli_interventi(monkeypatch):
     assert body["flags"]["use-interventions"] is False
 
 
-def test_manuali_disponibili_per_l_impianto(monkeypatch):
+def test_manuali_disponibili_per_il_prodotto(monkeypatch):
     from fielddata.documents import CatalogDocument
 
     install_fakes(monkeypatch, {})
-    monkeypatch.setattr(main, "get_installation", assistant.get_installation)
     monkeypatch.setattr(main, "documents_for_model", lambda conn, d, m, mo: [
         CatalogDocument("karolina.pdf", "manuale-utente", "indicizzato", None, None)] if mo == "karolina" else [])
     try:
-        body = client.get("/installations/EXT-KAR-00026/documents").json()
+        body = client.get("/products/stufe-pellet/extraflame/karolina/documents").json()
     finally:
         app.dependency_overrides.clear()
     assert body["model"] == "extraflame karolina"
     assert body["documents"][0]["status"] == "indicizzato"
+
+
+def test_elenco_dei_prodotti_senza_dati_dei_clienti(monkeypatch):
+    from fielddata.products import Product
+
+    install_fakes(monkeypatch, {})
+    monkeypatch.setattr(main, "list_products", lambda conn: [Product("stufe-pellet", "extraflame", "karolina", 1)])
+    try:
+        body = client.get("/products").json()
+    finally:
+        app.dependency_overrides.clear()
+    assert body == [{"domain": "stufe-pellet", "manufacturer": "extraflame", "model": "karolina", "indexed_documents": 1}]
+    assert client.get("/installations").status_code == 404
+
+
+def test_ask_per_prodotto_senza_impianto(monkeypatch):
+    svc, calls = install_fakes(monkeypatch, {"use-interventions": True})
+    try:
+        body = client.post("/ask", json={"question": "allarme sonda fumi", "domain": "stufe-pellet",
+                                         "manufacturer": "extraflame", "model": "karolina"}).json()
+    finally:
+        app.dependency_overrides.clear()
+    # Manuali e interventi simili filtrati sul modello scelto; nessuno storico di un impianto preciso.
+    assert calls[0]["model"] == "karolina" and body["scope"]["serial_number"] is None
+    assert "IMPIANTO:" not in svc._chat.messages[1]["content"]
 
 
 def test_la_cache_scrive_con_la_versione_dei_manuali_letta(monkeypatch):
@@ -150,6 +208,22 @@ def test_si_mostrano_solo_le_fonti_citate():
     text = "Spegnere la stufa [M3]. Poi premere il tasto 5 [M4, I2]."
     assert [s["id"] for s in cited_only(sources, text)] == ["M3", "M4", "I2"]
     assert cited_only(sources, "nessuna citazione") == []
+
+
+def test_la_ricerca_dei_manuali_esclude_i_manifest():
+    from api.retrieval import search_manuals
+
+    captured = {}
+
+    class FakeContainer:
+        client_connection = SimpleNamespace(last_response_headers={"x-ms-request-charge": "9.4"})
+
+        def query_items(self, query, parameters, enable_cross_partition_query):
+            captured["query"] = query
+            return []
+
+    search_manuals(FakeContainer(), [0.1] * 3, domain="stufe-pellet", manufacturer="extraflame", model="karolina")
+    assert "c.kind = 'chunk'" in captured["query"]
 
 
 def test_gli_interventi_lontani_non_entrano_nel_prompt(monkeypatch):

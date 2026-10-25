@@ -101,6 +101,8 @@ charge = container.client_connection.last_response_headers["x-ms-request-charge"
 ```
 
 - **Idempotenza**: id deterministici (`document_id` = hash del percorso del blob, chunk `document_id-0007`) + upsert → rielaborare un messaggio o ricaricare un manuale **sostituisce** i chunk (verificato: 106, non 212). Chunk in eccesso di una versione più corta → cancellati.
+- **Manifest**: dopo chunk e cancellazioni il worker scrive `document_id-manifest` (`kind: "manifest"`, `chunk_count`, `pages`, `source_etag`) **nella stessa partizione logica**. Segnala "documento completo" a chi legge il change feed (vedi §6). La ricerca filtra `c.kind = 'chunk'`.
+- **Transactional batch** (`execute_item_batch`): operazioni atomiche, ma solo con la **stessa partition key** e fino a **100 operazioni / ~1,2 MB** nell'SDK Python (2 MB lato servizio). Un chunk con embedding pesa ~35 KB → ~34 per batch: la Karolina (106 chunk) richiederebbe 4 batch, quindi niente atomicità sull'intero documento.
 - Query **parametrizzate** (`@domain`), mai valori concatenati nella stringa.
 
 ### Costi osservati
@@ -152,7 +154,10 @@ def on_chunks_changed(docs: func.DocumentList) -> None: ...
 - **Lease container**: segnalibri del processor (partition key `/id`). Con Entra ID va creato prima (Bicep).
 - Connessione a identità: app setting `CosmosDB__accountEndpoint`.
 - Al primo avvio legge solo le modifiche **da quel momento** (`start_from_beginning` per rileggere tutto).
-- Massimo 100 documenti per invocazione → 106 chunk = **2 lotti** → 2 eventi per lo stesso documento: i consumatori devono essere idempotenti.
+- Massimo 100 documenti per invocazione → 106 chunk = **2 lotti**. Prima del manifest ogni lotto produceva un evento `Document.Indexed` e un `indexed_at`, il primo su un documento **incompleto**.
+- **Ordine garantito solo dentro una partizione logica** (con chiave gerarchica: la coppia completa `[domain, document_id]`). Il manifest sta nella partizione dei suoi chunk ed è scritto per ultimo → quando la funzione lo vede, ha già ricevuto tutti i chunk. Così `on_chunks_changed` reagisce solo ai manifest: un evento per documento completo. In un altro container o con un'altra chiave potrebbe arrivare prima dei chunk.
+- È un *transactional outbox*: lo stato si scrive in un posto solo (Cosmos) e gli eventi ne derivano dal change feed, invece di un *dual write* del worker su Cosmos + Event Grid + PostgreSQL.
+- Un messaggio rielaborato riscrive il manifest → secondo evento: i consumatori restano idempotenti.
 - **Retry policy obbligatoria**: senza, se la funzione fallisce il segnalibro avanza comunque e le modifiche sono perse.
 - Un trigger che non riesce ad avviarsi (es. 403 sul lease container) **non produce invocazioni**: l'errore è nei log dell'host (`traces`, `severityLevel >= 3`).
 
@@ -189,6 +194,8 @@ def on_chunks_changed(docs: func.DocumentList) -> None: ...
 | Leggere le proprie scritture con il minimo costo | Session |
 | Il change feed non vede le cancellazioni | latest version mode: soft delete o all versions and deletes |
 | Modifiche perse quando la funzione del change feed fallisce | retry policy sul trigger |
+| Sapere dal change feed quando un gruppo di item è completo | item finale nella **stessa partizione logica**: l'ordine è garantito solo lì |
+| Scrivere atomicamente più item | transactional batch: stessa partition key, max 100 operazioni e 2 MB |
 
 ## Domande di ripasso
 
@@ -199,6 +206,6 @@ def on_chunks_changed(docs: func.DocumentList) -> None: ...
 5. Come garantisce il worker che ricaricare un manuale non duplichi i chunk?
 6. Perché la stessa query vettoriale non funziona nel Data Explorer?
 7. A cosa serve il lease container, e perché l'abbiamo creato con Bicep?
-8. Perché un manuale da 106 chunk ha prodotto due eventi?
+8. Perché un manuale da 106 chunk produceva due eventi, e perché il manifest deve stare nella partizione dei suoi chunk?
 9. Che cosa succede senza retry policy se `on_chunks_changed` va in errore?
 10. Il change feed vede un chunk cancellato dal worker? Come lo renderesti visibile?

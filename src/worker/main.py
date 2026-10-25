@@ -22,6 +22,7 @@ from azure.storage.blob import BlobClient
 
 from worker.chunking import build_chunks
 from shared.foundry import Embedder
+from shared.models import manifest_for
 from worker.errors import InvalidDocument, PermanentError
 from worker.messages import IndexRequest, parse_body
 from worker.pdf import extract_pages
@@ -50,9 +51,10 @@ def index_document(request: IndexRequest, credential, embedder: Embedder, stores
     chunks = build_chunks(request, pages)
     vectors = embedder.embed([c.text for c in chunks])
     chunks = [replace(c, embedding=v) for c, v in zip(chunks, vectors, strict=True)]
+    manifest = manifest_for(chunks, request.etag)
     # Scrittura su tutti gli store configurati: oggi solo Cosmos. L'interfaccia permette di
     # aggiungerne o sostituirne uno senza toccare il resto della pipeline.
-    return [store.replace_document(request.domain, chunks[0].document_id, chunks) for store in stores]
+    return [store.replace_document(request.domain, chunks[0].document_id, chunks, manifest) for store in stores]
 
 
 def _handle(receiver: ServiceBusReceiver, msg: ServiceBusReceivedMessage, credential, embedder, stores) -> None:

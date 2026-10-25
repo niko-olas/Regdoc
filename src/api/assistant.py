@@ -108,8 +108,8 @@ def ask(svc: Services, question: str, *, serial_number: str | None, domain: str,
     response = {
         "answer": text,
         "sources": answer.cited_only(answer.build_sources(manuals, similar), text),
-        "installation": installation.__dict__ if installation else None,
-        "scope": {"domain": domain, "manufacturer": manufacturer, "model": model},
+        # Nessun dato del cliente: la risposta finisce in cache, e chi chiama conosce già l'impianto.
+        "scope": {"domain": domain, "manufacturer": manufacturer, "model": model, "serial_number": serial_number},
         "flags": {FLAG_INTERVENTIONS: use_interventions, FLAG_SEMANTIC_CACHE: use_semantic_cache},
         "usage": {**usage, "cosmos_ru": ru},
     }

@@ -60,10 +60,11 @@ def on_chunks_changed(docs: func.DocumentList) -> None:
     ]
     _get_publisher().send(events)
     logging.info(
-        "Change feed: %d modifiche, %d eventi %s pubblicati (%s)",
+        "Change feed: %d modifiche, %d documenti completi, eventi %s pubblicati (%s)",
         len(docs), len(events), EVENT_TYPE, ", ".join(e.subject for e in events),
     )
-    # Catalogo: il documento risulta indicizzato. Upsert idempotente, ripeterlo è innocuo.
+    # Catalogo: il documento risulta indicizzato solo ora che è completo (manifest).
+    # Upsert idempotente, ripeterlo è innocuo.
     now = datetime.now(timezone.utc)
     with connect(_credential) as conn:
         for s in summaries:
