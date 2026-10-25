@@ -108,7 +108,7 @@ scripts/
 docs/
   decision-log.md
   troubleshooting-log.md
-  study/               # materiale d'esame: skill AI-200, recap per modulo, note Python
+  study/               # materiale d'esame: skill AI-200, recap per modulo
 tests/
 samples/               # manuali tecnici di prova (PDF, non tracciati)
 ```
