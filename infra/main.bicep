@@ -355,7 +355,7 @@ resource scalerId 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' 
   location: location
 }
 
-// --- Function App di ingestion (F1-F3) ----------------------------------------------------------
+// --- Function App (F1-F3): blob_created, catalog, changefeed (src/functions) --------------------
 resource funcStorage 'Microsoft.Storage/storageAccounts@2025-01-01' = {
   name: funcStorageName
   location: location

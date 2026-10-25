@@ -119,7 +119,7 @@ repliche). Per azzerare i costi tra una sessione e l'altra:
 
 | Cartella | Contenuto |
 |---|---|
-| `src/ingestion` | Function App: `on_blob_created`, `on_document_uploaded`, `on_chunks_changed` |
+| `src/functions` | Function App, una cartella per funzione: `blob_created/`, `catalog/`, `changefeed/` |
 | `src/worker` | Indicizzatore su Container Apps |
 | `src/api` | API FastAPI e interfaccia web |
 | `src/fielddata` | Accesso a PostgreSQL: impianti, interventi, catalogo, ricerca vettoriale |

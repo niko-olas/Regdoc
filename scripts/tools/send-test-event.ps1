@@ -1,5 +1,5 @@
 # Simula la consegna di un evento BlobCreated di Event Grid alla Function in locale.
-# Prerequisiti: func start in src/ingestion e variabili caricate con . .\scripts\env.ps1
+# Prerequisiti: func start in src/functions e variabili caricate con . .\scripts\env.ps1
 #
 # Uso:
 #   .\scripts\tools\send-test-event.ps1                      # nuovo id evento

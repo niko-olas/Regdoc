@@ -88,10 +88,11 @@ Dopo ogni problema risolto, proponi allo stesso modo una voce per `docs/troubles
 ```
 src/
   shared/              # libreria comune: modelli dei chunk, client degli embedding, config, telemetria
-  ingestion/           # Function App
-    function_app.py    #   on_blob_created: Event Grid → topic documents
-    catalog.py         #   on_document_uploaded: subscription catalog → catalogo (PostgreSQL)
-    changefeed.py      #   on_chunks_changed: change feed → evento custom, catalogo, invalidazione cache
+  functions/           # Function App: una cartella per funzione, registrate come blueprint
+    function_app.py    #   registra i blueprint
+    blob_created/      #   on_blob_created: Event Grid → topic documents
+    catalog/           #   on_document_uploaded: subscription catalog → catalogo (PostgreSQL)
+    changefeed/        #   on_chunks_changed: manifest dal change feed → evento custom, catalogo, invalidazione cache
   worker/              # consumer della subscription indexer su Container Apps: PDF → chunk → Cosmos
   fielddata/           # accesso a PostgreSQL: impianti, interventi, catalogo, ricerca di guasti simili
   api/                 # API di query e interfaccia web (static/), immagine per App Service

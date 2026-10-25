@@ -26,7 +26,7 @@ $STORAGE = "stregdoc<suffisso>"
 # Nome globale (<nome>.servicebus.windows.net): 6-50 caratteri, lettere, numeri e trattini.
 $SB_NAMESPACE = "sb-regdoc-<suffisso>"
 
-# Function App di ingestion e il suo storage "di servizio" (chiavi dell'host, pacchetti di deploy),
+# Function App (src/functions) e il suo storage "di servizio" (chiavi dell'host, pacchetti di deploy),
 # separato da quello dei documenti. Stesse regole di nome dello storage sopra.
 $FUNC_STORAGE = "stregdocfn<suffisso>"
 $FUNCAPP      = "func-regdoc-ingest-<suffisso>"

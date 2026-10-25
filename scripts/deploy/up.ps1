@@ -74,7 +74,7 @@ foreach ($img in @(@("regdoc-worker", $WORKER_TAG, "src/worker/Dockerfile"), @("
 }
 
 Step "4/8 Codice della Function"
-Push-Location src/ingestion
+Push-Location src/functions
 try { Retry { func azure functionapp publish $out.funcAppName.value --python } "Pubblicazione della Function" }
 finally { Pop-Location }
 

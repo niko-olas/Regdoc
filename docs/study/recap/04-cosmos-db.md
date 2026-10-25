@@ -2,7 +2,7 @@
 
 Dominio d'esame: **2. Soluzioni AI con i servizi di data management (25–30%)** → *Azure Cosmos DB for NoSQL*.
 Completato il 2026-10-23 (F2). Componenti: account serverless, container `chunks` e `leases` (`infra/modules/cosmos-db.bicep`),
-worker `src/worker`, funzione `on_chunks_changed` in `src/ingestion/changefeed.py`, script `scripts/tools/search_cosmos.py`.
+worker `src/worker`, funzione `on_chunks_changed` in `src/functions/changefeed/function.py`, script `scripts/tools/search_cosmos.py`.
 
 | Skill | Come è stata coperta |
 |---|---|

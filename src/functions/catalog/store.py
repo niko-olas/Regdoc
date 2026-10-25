@@ -52,7 +52,7 @@ def upload_record(body: dict, enqueued_at: datetime) -> dict:
 
 
 def indexed_record(summary: dict, indexed_at: datetime) -> dict:
-    """Riga del catalogo da un riepilogo del change feed (vedi indexed_events.summarize_changes)."""
+    """Riga del catalogo da un riepilogo del change feed (vedi changefeed/indexed_events.py)."""
     blob_path = summary["blob_path"]
     return {
         "blob_path": blob_path,

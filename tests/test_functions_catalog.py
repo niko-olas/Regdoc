@@ -2,9 +2,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ingestion.catalog_store import indexed_record, upload_record
-from ingestion.documents import DocumentRef, build_message
-from ingestion.indexed_events import summarize_changes
+from functions.catalog.store import indexed_record, upload_record
+from functions.blob_created.documents import DocumentRef, build_message
+from functions.changefeed.indexed_events import summarize_changes
 
 NOW = datetime(2026, 10, 23, 20, 0, tzinfo=timezone.utc)
 REF = DocumentRef("stufe-pellet", "extraflame", "karolina", "manuale-utente", "karolina.pdf",

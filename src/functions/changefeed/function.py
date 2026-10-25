@@ -1,8 +1,7 @@
 """Change feed del container `chunks` → evento custom su Event Grid, catalogo dei documenti
 e invalidazione della cache Redis.
 
-Blueprint registrato in function_app.py: la funzione vive nella stessa Function App
-dell'ingestion ma resta in un modulo separato.
+Blueprint registrato in function_app.py, come le altre funzioni della Function App.
 """
 import logging
 import os
@@ -13,9 +12,9 @@ from azure.core.messaging import CloudEvent
 from azure.eventgrid import EventGridPublisherClient
 from azure.identity import DefaultAzureCredential
 
-from cache_invalidation import bump_versions
-from catalog_store import UPSERT_INDEXED, connect, indexed_record
-from indexed_events import EVENT_SOURCE, EVENT_TYPE, summarize_changes
+from changefeed.cache_invalidation import bump_versions
+from catalog.store import UPSERT_INDEXED, connect, indexed_record
+from changefeed.indexed_events import EVENT_SOURCE, EVENT_TYPE, summarize_changes
 
 bp = func.Blueprint()
 _credential = DefaultAzureCredential()

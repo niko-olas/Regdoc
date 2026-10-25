@@ -1,7 +1,7 @@
 # Recap 02 — Azure Functions
 
 Dominio d'esame: **3. Connessione e utilizzo dei servizi Azure (20–25%)** → *Azure Functions*.
-Completato il 2026-10-21. Componente: `src/ingestion` — Function che riceve l'evento `BlobCreated` da Event Grid e pubblica un messaggio sul topic Service Bus `documents`.
+Completato il 2026-10-21. Componente: `src/functions/blob_created` (allora `src/ingestion`) — Function che riceve l'evento `BlobCreated` da Event Grid e pubblica un messaggio sul topic Service Bus `documents`.
 
 | Skill | Come è stata coperta |
 |---|---|
@@ -38,7 +38,7 @@ Event Grid ──POST──► host Functions ──► on_blob_created ──�
 ## 3. Sviluppo locale
 
 ```powershell
-cd src\ingestion
+cd src\functions
 py -3.12 -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item local.settings.example.json local.settings.json   # e poi compilarlo
@@ -103,7 +103,7 @@ Scope come sotto-risorsa: `.../storageAccounts/<sa>/blobServices/default/contain
 ### Deploy
 
 ```powershell
-cd src\ingestion
+cd src\functions
 func azure functionapp publish $FUNCAPP
 ```
 
