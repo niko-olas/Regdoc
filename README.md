@@ -65,7 +65,8 @@ flowchart LR
 | Configurazione e osservabilità | App Configuration, Application Insights (OpenTelemetry) | Feature flag con refresh, tracce distribuite |
 
 Le scelte e le alternative scartate sono nel [decision log](docs/decision-log.md); i problemi incontrati e
-come sono stati risolti nel [troubleshooting log](docs/troubleshooting-log.md).
+come sono stati risolti nel [troubleshooting log](docs/troubleshooting-log.md); le modifiche versione per
+versione nel [changelog](CHANGELOG.md).
 
 ## Sicurezza
 

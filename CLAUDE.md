@@ -111,6 +111,7 @@ docs/
   study/               # materiale d'esame: skill AI-200, recap per modulo
 tests/
 samples/               # manuali tecnici di prova (PDF, non tracciati)
+CHANGELOG.md           # cosa è cambiato, per data e fase (il perché è nel decision log)
 ```
 
 Ogni componente containerizzato ha il suo `Dockerfile` e il suo `requirements.txt` accanto al codice; `src/shared/` e `src/fielddata/` entrano nelle immagini grazie al contesto di build.
