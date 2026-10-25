@@ -124,6 +124,18 @@ Le funzioni di RegDoc sono in due Function App: `ingest` (`on_blob_created`) e `
 - Una cartella per app, ognuna con `function_app.py`, `host.json`, `requirements.txt`: ogni app installa solo le sue dipendenze.
 - In locale, per provarle insieme: due `func start`, la seconda con `--port 7072`.
 
+### Scaling: istanze × concorrenza, push e pull
+
+- Esecuzioni contemporanee = **istanze** (`maximumInstanceCount`) × **concorrenza per istanza** (per Service Bus `maxConcurrentCalls` in `host.json`, default 16). Prima della separazione: 10 × 16 = 160 esecuzioni possibili contro ~35 connessioni libere su PostgreSQL B1ms.
+- `catalog`: ogni esecuzione apre una connessione → 2 × 4 = 8, più **un** lotto del change feed alla volta (il trigger Cosmos elabora un lotto per lease, e `chunks` ha un solo lease) = 9. Con l'API (pool da 5) si resta sotto metà del limite.
+- Senza limite, un caricamento massivo produce `too many connections` → messaggi abbandonati → dopo `maxDeliveryCount` (3 su `catalog`) **dead-letter**, e l'API resta senza connessioni.
+
+| Trigger | Modello | Se le istanze sono sature | Limite basso di istanze |
+|---|---|---|---|
+| Service Bus, change feed di Cosmos, code | **pull**: è la funzione a prelevare | il lavoro resta nella sorgente; un messaggio non prelevato non consuma tentativi | va bene: rallenta, non perde nulla |
+| HTTP | **push** | la richiesta fallisce (429/503): non c'è una coda | sconsigliato sotto 40 (documentazione Flex) |
+| Event Grid | **push** (webhook) | Event Grid ritenta (qui 10 tentativi in 2 ore), poi scarta o manda in dead-letter | meglio accettare subito e lasciare il buffer a Service Bus → `ingest` resta a 10 |
+
 ## 7. Collegamento con Event Grid
 
 ```powershell
@@ -186,6 +198,7 @@ traces
 | Due app Flex Consumption nello stesso piano | Non si può: un'app per piano |
 | Due app sullo stesso storage dell'host si disturbano | Host ID collision: nomi uguali nei primi 32 caratteri (o storage separati) |
 | Limitare il carico su un database a valle | `maximumInstanceCount` dell'app + concorrenza per istanza in `host.json` |
+| Tetto basso alle istanze senza perdere eventi | Trigger pull (Service Bus, code, change feed): il lavoro aspetta nella sorgente. Con HTTP o Event Grid (push) no |
 
 ## Domande di ripasso
 

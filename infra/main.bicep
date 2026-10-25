@@ -387,9 +387,10 @@ module funcCatalog 'modules/function-app.bicep' = {
     planName: 'plan-regdoc-func-catalog'
     location: location
     appInsightsConnectionString: appInsights.properties.ConnectionString
-    // Ogni invocazione apre una connessione a PostgreSQL (B1ms: 50, di cui 15 riservate). 2 istanze per
-    // 4 messaggi contemporanei (host.json) più il change feed stanno sotto le ~10 connessioni; i caricamenti
-    // sono rari e quelli in più aspettano nella subscription invece di saturare il database.
+    // Ogni invocazione apre una connessione a PostgreSQL (B1ms: 50, di cui 15 riservate, condivise con l'API).
+    // 2 istanze × 4 messaggi (maxConcurrentCalls in host.json) più un lotto del change feed alla volta (un solo
+    // lease) fanno al massimo 9 connessioni. I trigger sono pull: i messaggi in più aspettano nella subscription
+    // senza consumare tentativi, invece di finire in dead-letter per "too many connections".
     maximumInstanceCount: 2
     appSettings: [
       // Trigger Service Bus con identità: il suffisso __fullyQualifiedNamespace sostituisce la connection string.
