@@ -55,3 +55,7 @@ $PG = "psql-regdoc-<suffisso>"
 
 # I nomi delle risorse aggiunte con infra/main.bicep (Redis, App Configuration, Application Insights)
 # li ricava il Bicep dal suffisso: non servono variabili qui.
+
+# Monitoraggio (F5): ID del workspace Log Analytics (customerId, un GUID) per le query di scripts/tools/kql.
+# Lo stampa up.ps1 a fine deploy (output logAnalyticsWorkspaceId del Bicep); cambia a ogni ricreazione.
+$LAW_ID = "<customerId del workspace>"

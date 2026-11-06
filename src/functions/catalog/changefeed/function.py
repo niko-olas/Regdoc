@@ -11,12 +11,15 @@ import azure.functions as func
 from azure.core.messaging import CloudEvent
 from azure.eventgrid import EventGridPublisherClient
 from azure.identity import DefaultAzureCredential
+from opentelemetry import propagate, trace
+from opentelemetry.trace import Link
 
 from changefeed.cache_invalidation import bump_versions
 from catalog_store import UPSERT_INDEXED, connect, indexed_record
-from changefeed.indexed_events import EVENT_SOURCE, EVENT_TYPE, summarize_changes
+from changefeed.indexed_events import EVENT_SOURCE, EVENT_TYPE, event_data, summarize_changes
 
 bp = func.Blueprint()
+tracer = trace.get_tracer("regdoc.catalog")
 _credential = DefaultAzureCredential()
 _publisher: EventGridPublisherClient | None = None
 
@@ -43,35 +46,34 @@ def _get_publisher() -> EventGridPublisherClient:
     # Con l'RBAC nativo il trigger non può creare container: `leases` è nel template Bicep.
     create_lease_container_if_not_exists=False,
 )
-def on_chunks_changed(docs: func.DocumentList) -> None:
+def on_chunks_changed(docs: func.DocumentList, context: func.Context) -> None:
     summaries = summarize_changes([doc.to_dict() for doc in docs])
     if not summaries:
         return
 
-    events = [
-        CloudEvent(
-            source=EVENT_SOURCE,
-            type=EVENT_TYPE,
-            subject=f"{s['domain']}/{s['document_id']}",
-            data=s,
-        )
-        for s in summaries
-    ]
-    _get_publisher().send(events)
-    logging.info(
-        "Change feed: %d modifiche, %d documenti completi, eventi %s pubblicati (%s)",
-        len(docs), len(events), EVENT_TYPE, ", ".join(e.subject for e in events),
-    )
-    # Catalogo: il documento risulta indicizzato solo ora che è completo (manifest).
-    # Upsert idempotente, ripeterlo è innocuo.
+    invocation = propagate.extract({"traceparent": context.trace_context.trace_parent})
+    invocation_link = Link(trace.get_current_span(invocation).get_span_context())
     now = datetime.now(timezone.utc)
     with connect(_credential) as conn:
         for s in summaries:
-            conn.execute(UPSERT_INDEXED, indexed_record(s, now))
-
-    # Le risposte in cache citano i manuali vecchi: si invalidano dopo l'evento. Se Redis o
-    # PostgreSQL falliscono, l'eccezione fa ritentare il lotto (retry policy sopra): rimandare
-    # l'evento e riscrivere il catalogo è innocuo.
-    versions = bump_versions({s["domain"] for s in summaries})
-    if versions:
-        logging.info("Cache invalidata: %s", versions)
+            # Il change feed non trasporta il contesto della traccia: lo porta il manifest, scritto dal
+            # worker. Uno span per documento, figlio della traccia dell'upload; un lotto raccoglie più
+            # documenti e l'invocazione non può avere un solo padre, quindi resta collegata con un link.
+            parent = propagate.extract({"traceparent": s["traceparent"]}) if s.get("traceparent") else invocation
+            with tracer.start_as_current_span("catalog.document_indexed", context=parent,
+                                              links=[invocation_link]) as span:
+                span.set_attribute("regdoc.blob_path", s.get("blob_path") or "")
+                span.set_attribute("regdoc.document_id", s["document_id"])
+                # Con la traccia attiva l'SDK aggiunge il traceparent come estensione del CloudEvent:
+                # chi consuma l'evento può continuare la stessa traccia.
+                _get_publisher().send([CloudEvent(source=EVENT_SOURCE, type=EVENT_TYPE,
+                                                  subject=f"{s['domain']}/{s['document_id']}", data=event_data(s))])
+                # Catalogo: il documento risulta indicizzato solo ora che è completo (manifest).
+                # Upsert idempotente, ripeterlo è innocuo.
+                conn.execute(UPSERT_INDEXED, indexed_record(s, now))
+                # Le risposte in cache citano i manuali vecchi: si invalidano dopo l'evento. Se Event Grid,
+                # PostgreSQL o Redis falliscono, l'eccezione fa ritentare il lotto (retry policy sopra):
+                # rimandare l'evento, riscrivere il catalogo e incrementare la versione sono innocui.
+                versions = bump_versions({s["domain"]})
+            logging.info("Documento completo %s/%s: evento %s, catalogo aggiornato, cache %s",
+                         s["domain"], s["document_id"], EVENT_TYPE, versions or "non configurata")

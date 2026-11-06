@@ -1,0 +1,20 @@
+// Tempi di una risposta: ogni fase dell'API (span rag.*) e la richiesta /ask intera, p50 e p95.
+// Dice subito dove va il tempo: di solito la generazione, poi la ricerca nei manuali.
+//
+// Uso (dalla radice, dopo . .\scripts\env.ps1):
+//   az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/risposte-tempi.kql" -o table
+//
+// Tabelle del workspace (AppRequests, AppDependencies): sono le stesse di requests/dependencies che il portale
+// mostra nei log di Application Insights, con nomi di colonna diversi (AppRoleName = cloud_RoleName,
+// Properties = customDimensions, DurationMs = duration). Gli span interni come rag.* finiscono in AppDependencies.
+let finestra = ago(24h);
+AppDependencies
+| where TimeGenerated > finestra and AppRoleName == "regdoc-api" and Name startswith "rag."
+| extend fase = Name
+| union (
+    AppRequests
+    | where TimeGenerated > finestra and AppRoleName == "regdoc-api" and Name has "/ask"
+    | extend fase = "POST /ask (totale)"
+)
+| summarize n = count(), p50_ms = round(percentile(DurationMs, 50)), p95_ms = round(percentile(DurationMs, 95)) by fase
+| order by p95_ms desc

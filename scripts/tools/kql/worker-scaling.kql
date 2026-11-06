@@ -1,0 +1,11 @@
+// Eventi di piattaforma del worker: scaling KEDA (da 0 a N repliche e ritorno), avvio e arresto delle
+// repliche, pull dell'immagine, revisioni. Per capire perché il worker non scala o non si avvia.
+// Per vedere quali eventi esistono: sostituisci le ultime due righe con | summarize count() by Reason_s
+//
+// Uso: az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/worker-scaling.kql" -o table
+let finestra = ago(24h);
+ContainerAppSystemLogs_CL
+| where TimeGenerated > finestra and ContainerAppName_s == "ca-regdoc-worker"
+| project TimeGenerated, RevisionName_s, ReplicaName_s, Reason_s, Log_s
+| order by TimeGenerated desc
+| take 100

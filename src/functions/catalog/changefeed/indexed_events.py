@@ -32,5 +32,12 @@ def summarize_changes(docs: list[dict]) -> list[dict]:
             "blob_path": doc.get("blob_path"),
             "chunk_count": doc.get("chunk_count"),
             "pages": doc.get("pages"),
+            "traceparent": doc.get("traceparent"),
         }
     return list(by_document.values())
+
+
+def event_data(summary: dict) -> dict:
+    """Dati dell'evento RegDoc.Document.Indexed: il riepilogo senza il contesto della traccia, che
+    viaggia come estensione del CloudEvent e non fa parte del contenuto."""
+    return {k: v for k, v in summary.items() if k != "traceparent"}

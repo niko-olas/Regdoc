@@ -1,0 +1,17 @@
+// Il viaggio di un documento in un'unica traccia: on_blob_created (ingest) → Service Bus → worker →
+// Cosmos → on_chunks_changed (catalog). Funziona perché il contesto passa nel messaggio (traceparent)
+// e nel manifest; tutti gli span hanno lo stesso OperationId e l'attributo regdoc.blob_path.
+// Le chiamate ripetute (es. ~100 upsert su Cosmos) sono raggruppate in una riga.
+//
+// Uso: imposta il percorso del blob qui sotto, poi
+//   az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/viaggio-documento.kql" -o table
+let percorso = "stufe-pellet/extraflame/karolina/manuale-utente/extraflame_karolina_manuale_utente.pdf";
+let finestra = ago(24h);
+let tracce = union AppRequests, AppDependencies
+    | where TimeGenerated > finestra and tostring(Properties["regdoc.blob_path"]) == percorso
+    | distinct OperationId;
+union AppRequests, AppDependencies
+| where TimeGenerated > finestra and OperationId in (tracce)
+| summarize inizio = min(TimeGenerated), chiamate = count(), durata_ms = round(sum(DurationMs)), errori = countif(Success == false)
+    by OperationId, componente = AppRoleName, operazione = Name
+| order by OperationId, inizio asc

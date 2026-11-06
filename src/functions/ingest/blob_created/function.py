@@ -8,10 +8,12 @@ import azure.functions as func
 from azure.identity import DefaultAzureCredential
 from azure.servicebus import ServiceBusClient, ServiceBusMessage, ServiceBusSender
 from azure.storage.blob import BlobClient
+from opentelemetry import propagate, trace
 
 from blob_created.documents import InvalidBlobPath, build_message, parse_subject
 
 bp = func.Blueprint()
+tracer = trace.get_tracer("regdoc.ingest")
 
 # Credenziale e client creati una volta per istanza e riusati tra le invocazioni:
 # aprire una connessione AMQP a ogni evento aggiunge latenza e, sotto carico,
@@ -33,7 +35,16 @@ def _get_sender() -> ServiceBusSender:
 
 
 @bp.event_grid_trigger(arg_name="event")
-def on_blob_created(event: func.EventGridEvent) -> None:
+def on_blob_created(event: func.EventGridEvent, context: func.Context) -> None:
+    # Span figlio dell'invocazione (l'host passa il suo contesto in context.trace_context): l'invio sul
+    # topic avviene dentro lo span, e l'SDK di Service Bus ne scrive il traceparent nel messaggio.
+    parent = propagate.extract({"traceparent": context.trace_context.trace_parent})
+    with tracer.start_as_current_span("ingest.blob_created", context=parent) as span:
+        span.set_attribute("regdoc.event_id", event.id)
+        _publish(event, span)
+
+
+def _publish(event: func.EventGridEvent, span: trace.Span) -> None:
     try:
         ref = parse_subject(event.subject)
     except InvalidBlobPath as exc:
@@ -42,6 +53,7 @@ def on_blob_created(event: func.EventGridEvent) -> None:
         logging.warning("Evento %s ignorato: %s", event.id, exc)
         return
 
+    span.set_attribute("regdoc.blob_path", ref.blob_path)
     blob_url = event.get_json()["url"]
     # L'evento non contiene i metadati x-ms-meta-*: vanno letti dal blob.
     props = BlobClient.from_blob_url(blob_url, credential=_credential).get_blob_properties()

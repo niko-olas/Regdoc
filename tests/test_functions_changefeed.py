@@ -43,3 +43,13 @@ def test_ignora_documenti_che_non_sono_del_worker():
 def test_tipo_del_manifest_uguale_a_quello_del_worker():
     # La Function App non importa src/shared: se i due valori divergono, nessun evento parte più.
     assert KIND_MANIFEST == SHARED_KIND_MANIFEST
+
+
+def test_il_contesto_della_traccia_non_entra_nei_dati_dell_evento():
+    from functions.catalog.changefeed.indexed_events import event_data
+
+    traceparent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+    [summary] = summarize_changes([{**manifest("a", 106), "traceparent": traceparent}])
+    # Il riepilogo lo porta (serve allo span del catalogo), l'evento no: viaggia come estensione del CloudEvent.
+    assert summary["traceparent"] == traceparent
+    assert "traceparent" not in event_data(summary) and event_data(summary)["chunk_count"] == 106

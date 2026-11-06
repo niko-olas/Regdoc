@@ -6,11 +6,19 @@
 Le due funzioni scrivono la stessa tabella (catalog_store.py) e restano nella stessa app.
 """
 import logging
+import os
 
 import azure.functions as func
 
-from changefeed.function import bp as changefeed_bp
-from document_uploaded.function import bp as document_uploaded_bp
+if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+    from azure.identity import DefaultAzureCredential
+    from azure.monitor.opentelemetry import configure_azure_monitor
+
+    # Come in ingest: con Entra ID il worker Python riceve la credenziale qui (vedi ingest/function_app.py).
+    configure_azure_monitor(credential=DefaultAzureCredential())
+
+from changefeed.function import bp as changefeed_bp  # noqa: E402
+from document_uploaded.function import bp as document_uploaded_bp  # noqa: E402
 
 app = func.FunctionApp()
 for blueprint in (document_uploaded_bp, changefeed_bp):

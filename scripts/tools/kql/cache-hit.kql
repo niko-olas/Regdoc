@@ -1,0 +1,16 @@
+// Tasso di hit della cache delle risposte, per giorno: quante domande evitano ricerca e generazione.
+// L'esito è l'attributo regdoc.cache sullo span della richiesta /ask (exact, semantic, miss).
+//
+// Uso: az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/cache-hit.kql" -o table
+let finestra = ago(7d);
+AppRequests
+| where TimeGenerated > finestra and AppRoleName == "regdoc-api" and Name has "/ask"
+| extend cache = tostring(Properties["regdoc.cache"])
+| where isnotempty(cache)
+| summarize richieste = count(),
+            exact = countif(cache == "exact"),
+            semantic = countif(cache == "semantic"),
+            miss = countif(cache == "miss")
+    by giorno = bin(TimeGenerated, 1d)
+| extend hit_percento = round(100.0 * (exact + semantic) / richieste, 1)
+| order by giorno desc

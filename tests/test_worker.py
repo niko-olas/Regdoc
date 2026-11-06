@@ -126,3 +126,38 @@ def test_extract_pages_rifiuta_pdf_senza_testo(tmp_path):
     writer.write(path)
     with pytest.raises(InvalidDocument):
         extract_pages(path.read_bytes())
+
+
+# --- Contesto della traccia: messaggio → worker → manifest ------------------------------------
+from opentelemetry import trace  # noqa: E402
+from opentelemetry.sdk.trace import TracerProvider  # noqa: E402
+
+from worker.tracing import context_from_message, current_traceparent, message_carrier  # noqa: E402
+
+TRACEPARENT = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+
+
+def test_il_contesto_del_messaggio_arriva_con_chiavi_bytes():
+    # Come lo consegna l'SDK di Service Bus: chiavi e valori come bytes.
+    carrier = message_carrier({b"traceparent": TRACEPARENT.encode(), b"Diagnostic-Id": b"altro"})
+    assert carrier == {"traceparent": TRACEPARENT}
+
+
+def test_diagnostic_id_se_manca_traceparent():
+    assert message_carrier({"Diagnostic-Id": TRACEPARENT}) == {"traceparent": TRACEPARENT}
+    assert message_carrier(None) == {} and message_carrier({b"domain": b"stufe-pellet"}) == {}
+
+
+def test_lo_span_del_worker_continua_la_traccia_dell_upload():
+    parent = trace.get_current_span(context_from_message({b"traceparent": TRACEPARENT.encode()})).get_span_context()
+    assert format(parent.trace_id, "032x") == "0af7651916cd43dd8448eb211c80319c"
+
+
+def test_il_manifest_porta_il_traceparent_dello_span_corrente():
+    tracer = TracerProvider().get_tracer("test")
+    assert current_traceparent() is None  # nessuno span attivo: niente da propagare
+    with tracer.start_as_current_span("worker.index_document") as span:
+        traceparent = current_traceparent()
+        request = parse_body(json.dumps(BODY))
+        manifest = manifest_for(build_chunks(request, [(1, "uno")]), request.etag, traceparent=traceparent)
+    assert manifest["traceparent"].split("-")[1] == format(span.get_span_context().trace_id, "032x")

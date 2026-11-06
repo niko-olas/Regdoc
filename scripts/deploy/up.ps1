@@ -13,8 +13,8 @@ $PSNativeCommandUseErrorActionPreference = $true
 if (-not $RG -or -not $ACR_NAME) { throw "Carica prima le variabili: . .\scripts\env.ps1" }
 
 $SUFFIX     = $ACR_NAME -replace '^acrregdoc', ''
-$API_TAG    = "2.2.0"
-$WORKER_TAG = "0.2.0"
+$API_TAG    = "2.3.0"
+$WORKER_TAG = "0.3.0"
 $ME_ID      = az ad signed-in-user show --query id -o tsv
 $ME_UPN     = az ad signed-in-user show --query userPrincipalName -o tsv
 # IP pubblico di questo PC, per il firewall di PostgreSQL (gli script locali si collegano da qui).
@@ -128,5 +128,6 @@ az webapp restart -g $RG -n $out.webAppName.value -o none
 
 Step "Fatto"
 Write-Host "App:    $($out.webAppUrl.value)"
+Write-Host "KQL:    `$LAW_ID = `"$($out.logAnalyticsWorkspaceId.value)`"   (copialo in env.ps1 per scripts\tools\kql)"
 Write-Host "Prova:  .\scripts\deploy\smoke-test.ps1   (dopo qualche minuto: avvio del container e indicizzazione)"
 Write-Host "Spegni: .\scripts\deploy\down.ps1"

@@ -63,7 +63,7 @@ flowchart LR
 | Reazione alle modifiche | Change feed di Cosmos → Function App `catalog` | Quando un documento è completo (manifest scritto per ultimo dal worker): catalogo aggiornato, cache invalidata, un evento `RegDoc.Document.Indexed` per altri sistemi |
 | Risposte | App Service (container), Foundry (`gpt-4.1-mini`) | API e interfaccia web, RAG con citazioni |
 | Cache | Azure Managed Redis (RediSearch) | Cache esatta e semantica con indice vettoriale |
-| Configurazione e osservabilità | App Configuration, Application Insights (OpenTelemetry) | Feature flag con refresh, tracce distribuite |
+| Configurazione e osservabilità | App Configuration, Application Insights (OpenTelemetry), Azure Monitor | Feature flag con refresh; ogni documento è una traccia dall'upload al catalogo; query KQL pronte e alert sui documenti bloccati in dead-letter |
 
 Le scelte e le alternative scartate sono nel [decision log](docs/decision-log.md); i problemi incontrati e
 come sono stati risolti nel [troubleshooting log](docs/troubleshooting-log.md); le modifiche versione per
@@ -131,7 +131,7 @@ repliche). Per azzerare i costi tra una sessione e l'altra:
 | `infra` | `main.bicep`, moduli, schema PostgreSQL |
 | `scripts/deploy` | `up.ps1`, `down.ps1`, `smoke-test.ps1` |
 | `scripts/db` | Schema, permessi delle identità, import dei dati di esempio, riallineamento del catalogo |
-| `scripts/tools` | Diagnosi e misure: query SQL, peek di Service Bus, ricerche vettoriali, benchmark di indici e connessioni |
+| `scripts/tools` | Diagnosi e misure: query SQL, peek di Service Bus, ricerche vettoriali, benchmark di indici e connessioni, query KQL (`kql/`) |
 
 ## Prima di darlo a un'azienda
 

@@ -10,6 +10,7 @@ telemetry.setup("regdoc-api", credential)
 
 from fastapi import Depends, FastAPI, HTTPException  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
+from opentelemetry import trace  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from api import assistant  # noqa: E402
@@ -74,7 +75,13 @@ def product_documents(domain: str, manufacturer: str, model: str, svc: Services 
 @app.post("/ask")
 def ask(req: AskRequest, svc: Services = Depends(get_services)) -> dict:
     try:
-        return assistant.ask(svc, req.question, serial_number=req.serial_number, domain=req.domain,
-                             manufacturer=req.manufacturer, model=req.model)
+        result = assistant.ask(svc, req.question, serial_number=req.serial_number, domain=req.domain,
+                               manufacturer=req.manufacturer, model=req.model)
     except assistant.InstallationNotFound:
         raise HTTPException(404, f"Impianto {req.serial_number} non trovato") from None
+    # Esito della cache (exact, semantic, miss) sullo span della richiesta: in KQL è una colonna di
+    # AppRequests (Properties), da cui si calcola il tasso di hit senza leggere le risposte.
+    span = trace.get_current_span()
+    span.set_attribute("regdoc.cache", result["cache"])
+    span.set_attribute("regdoc.model", f"{result['scope']['manufacturer']} {result['scope']['model']}")
+    return result

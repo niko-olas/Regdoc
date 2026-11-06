@@ -43,6 +43,7 @@ API in container su App Service, con interfaccia web per i tecnici. Il tecnico s
 
 **Trasversali (F5)**
 App Configuration (config e feature flag), OpenTelemetry → Application Insights. L'app non ha segreti (solo managed identity): Key Vault si studia con un esperimento separato.
+Un documento è **una sola traccia** da on_blob_created a on_chunks_changed: il contesto W3C (`traceparent`) passa nel messaggio Service Bus (lo scrive l'SDK) e nel manifest (il change feed non trasporta header). API, worker e Function App inviano con Entra ID; le Function App sono in `telemetryMode: OpenTelemetry` con `configure_azure_monitor` esplicito nel worker Python. Query KQL in `scripts/tools/kql/` (workspace Log Analytics, `$LAW_ID`); metric alert sui messaggi in dead-letter, senza action group.
 
 **Infrastruttura**
 Tutto in `infra/main.bicep`. `scripts/deploy/up.ps1` crea l'ambiente da zero (Bicep in due passate, immagini, le due Function App, dati di esempio); `scripts/deploy/down.ps1` lo cancella a fine sessione, così i costi restano a zero tra una sessione e l'altra.
@@ -108,6 +109,7 @@ scripts/
   deploy/              # up.ps1, down.ps1, smoke-test.ps1
   db/                  # schema, permessi delle identità, import dei dati di esempio, riallineamento catalogo
   tools/               # strumenti di diagnosi e misura: query, peek Service Bus, ricerche, benchmark
+    kql/               #   query KQL su Log Analytics: tempi, cache, costi, viaggio di un documento, errori, worker
 docs/
   decision-log.md
   troubleshooting-log.md

@@ -14,6 +14,32 @@ Formato di una voce:
 
 ---
 
+## 2026-11-06 — Una traccia per documento, dall'upload al catalogo; KQL e alert sulle dead-letter
+
+**Decisione**: API, worker e Function App inviano OpenTelemetry ad Application Insights con Entra ID. Il contesto
+W3C passa da un componente all'altro: l'host delle Functions lo dà a `on_blob_created` (`context.trace_context`),
+l'SDK di Service Bus lo scrive nel messaggio (`traceparent`), il worker apre lo span di elaborazione come figlio e
+lo salva nel **manifest**; `on_chunks_changed` apre uno span per documento figlio di quel contesto, con un link
+all'invocazione. Le Function App sono in `telemetryMode: OpenTelemetry` con `configure_azure_monitor(credential=…)`
+nel codice. Query KQL salvate in `scripts/tools/kql/`; metric alert su `DeadletteredMessages` del topic, senza
+action group.
+
+**Alternative scartate**: span del worker con un *link* al messaggio invece che figlio (traccia spezzata in due
+operazioni: il viaggio di un documento non si legge più in una vista sola); contesto passato nei dati dell'evento
+o in un campo inventato (esiste lo standard: `traceparent` nel messaggio e come estensione del CloudEvent);
+`PYTHON_APPLICATIONINSIGHTS_ENABLE_TELEMETRY` (configurazione automatica senza credenziale: con Entra ID va
+autenticato separatamente sia l'host sia il worker Python); un solo span per invocazione del change feed (un lotto
+contiene più documenti e uno span ha un solo padre); alert con email (servirebbe un indirizzo personale come
+parametro; per ora basta Monitor → Alerts).
+
+**Motivo**: "perché questo manuale non è interrogabile?" ha una risposta sola se upload, coda, indicizzazione e
+catalogo sono la stessa traccia (`viaggio-documento.kql`). Le query rispondono alle domande di esercizio (dove va
+il tempo di una risposta, quanto aiuta la cache, quanto costa) e l'alert segnala i documenti bloccati, che senza
+intervento non verrebbero mai indicizzati.
+
+**Fase / skill**: F5 — tracing di sistemi distribuiti con OpenTelemetry; query KQL su log e metriche; F2 —
+monitoraggio e troubleshooting di Container Apps; Service Bus (dead-letter); Azure Functions (configurazione).
+
 ## 2026-10-25 — Due Function App: ingest e catalog
 
 **Decisione**: le tre funzioni passano da una Function App a due. `func-regdoc-ingest` ospita `on_blob_created`;

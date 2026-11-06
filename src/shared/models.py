@@ -40,7 +40,7 @@ class Chunk:
         return asdict(self)
 
 
-def manifest_for(chunks: list[Chunk], source_etag: str | None = None) -> dict:
+def manifest_for(chunks: list[Chunk], source_etag: str | None = None, traceparent: str | None = None) -> dict:
     """Item "documento completo": stessa partizione logica dei suoi chunk, scritto dopo di loro."""
     first = chunks[0]
     return {
@@ -57,4 +57,7 @@ def manifest_for(chunks: list[Chunk], source_etag: str | None = None) -> dict:
         "pages": len({c.page for c in chunks}),
         # Versione del blob indicizzata: dice quale caricamento ha prodotto questi chunk.
         "source_etag": source_etag,
+        # Contesto W3C della traccia dell'indicizzazione: il change feed non trasporta header, quindi è il
+        # manifest a portare la traccia fino a on_chunks_changed.
+        "traceparent": traceparent,
     }

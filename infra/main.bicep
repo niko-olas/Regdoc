@@ -23,8 +23,8 @@ param userPrincipalName string
 @description('IP pubblico da cui lavori, per il firewall di PostgreSQL. Vuoto = nessuna regola.')
 param clientIpAddress string = ''
 
-param apiImageTag string = '2.2.0'
-param workerImageTag string = '0.2.0'
+param apiImageTag string = '2.3.0'
+param workerImageTag string = '0.3.0'
 
 @description('Seconda passata: richiede le immagini in ACR e la Function già pubblicata.')
 param deployWorkloads bool = false
@@ -190,6 +190,40 @@ resource sbCatalog 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2024-01
     maxDeliveryCount: 3
     deadLetteringOnMessageExpiration: true
     deadLetteringOnFilterEvaluationExceptions: true
+  }
+}
+
+// Un documento in dead-letter non verrà indicizzato o catalogato senza un intervento: metric alert sul
+// numero di messaggi in dead-letter del topic (la metrica è per coda/topic e somma le due subscription).
+// Senza action group: l'alert compare in Monitor → Alerts; si risolve da solo quando la DLQ si svuota.
+resource deadletterAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
+  name: 'alert-regdoc-deadletter'
+  location: 'global'
+  properties: {
+    description: 'Messaggi in dead-letter sul topic documents (subscription indexer o catalog): un documento è bloccato.'
+    severity: 2
+    enabled: true
+    scopes: [ sb.id ]
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT15M'
+    autoMitigate: true
+    criteria: {
+      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      allOf: [
+        {
+          criterionType: 'StaticThresholdCriterion'
+          name: 'deadletter'
+          metricNamespace: 'Microsoft.ServiceBus/namespaces'
+          metricName: 'DeadletteredMessages'
+          dimensions: [ { name: 'EntityName', operator: 'Include', values: [ sbTopic.name ] } ]
+          // Gauge: conta i messaggi presenti ora nella DLQ, non quelli arrivati nella finestra.
+          timeAggregation: 'Maximum'
+          operator: 'GreaterThan'
+          threshold: 0
+        }
+      ]
+    }
+    actions: []
   }
 }
 
@@ -519,6 +553,8 @@ resource worker 'Microsoft.App/containerApps@2025-01-01' = if (deployWorkloads) 
             { name: 'SERVICEBUS_FQDN', value: '${sb.name}.servicebus.windows.net' }
             { name: 'COSMOS_ENDPOINT', value: cosmos.properties.documentEndpoint }
             { name: 'FOUNDRY_ENDPOINT', value: foundry.properties.endpoint }
+            // Identifica la risorsa, non è un segreto: l'invio si autentica con l'identità del worker.
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
           ]
         }
       ]
@@ -671,6 +707,11 @@ resource workerSbReceiver 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   scope: sbIndexer
   properties: { roleDefinitionId: roleId(roles.sbReceiver), principalId: workerId.properties.principalId, principalType: 'ServicePrincipal' }
 }
+resource workerMetrics 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appInsights.id, workerId.id, roles.metricsPublisher)
+  scope: appInsights
+  properties: { roleDefinitionId: roleId(roles.metricsPublisher), principalId: workerId.properties.principalId, principalType: 'ServicePrincipal' }
+}
 resource workerOpenAi 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(foundry.id, workerId.id, roles.openAiUser)
   scope: foundry
@@ -808,3 +849,5 @@ output pgHost string = pg.properties.fullyQualifiedDomainName
 output storageName string = storage.name
 output cosmosEndpoint string = cosmos.properties.documentEndpoint
 output foundryEndpoint string = foundry.properties.endpoint
+// Workspace ID (customerId) per le query KQL di scripts/tools/kql con `az monitor log-analytics query -w`.
+output logAnalyticsWorkspaceId string = law.properties.customerId

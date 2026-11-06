@@ -1,0 +1,15 @@
+// Log del container del worker su Container Apps (stdout/stderr): errori, avvisi e messaggi in dead-letter.
+// Sono i log della console, raccolti dall'environment anche quando il codice non invia telemetria:
+// il primo posto dove guardare se il worker non parte o si riavvia.
+//
+// Tabella *_CL perché l'environment scrive su Log Analytics (appLogsConfiguration: log-analytics); con la
+// destinazione "Azure Monitor" la tabella sarebbe ContainerAppConsoleLogs, con colonne senza suffisso.
+//
+// Uso: az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/worker-log.kql" -o table
+let finestra = ago(24h);
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > finestra and ContainerAppName_s == "ca-regdoc-worker"
+| where Log_s has_any ("ERROR", "WARNING", "Traceback", "dead-letter")
+| project TimeGenerated, RevisionName_s, Log_s
+| order by TimeGenerated desc
+| take 100

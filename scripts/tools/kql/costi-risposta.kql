@@ -1,0 +1,15 @@
+// Costo delle risposte generate (le cache hit non costano nulla): RU di Cosmos per la ricerca nei
+// manuali e token del prompt per la generazione, per giorno. Attributi messi dall'API sugli span rag.*.
+//
+// Uso: az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/costi-risposta.kql" -o table
+let finestra = ago(7d);
+AppDependencies
+| where TimeGenerated > finestra and AppRoleName == "regdoc-api" and Name in ("rag.search_manuals", "rag.generate")
+| extend ru = todouble(Properties["regdoc.cosmos.ru"]), prompt_tokens = toint(Properties["regdoc.prompt_tokens"])
+| summarize ricerche = countif(Name == "rag.search_manuals"),
+            ru_medie = round(avgif(ru, Name == "rag.search_manuals"), 1),
+            generazioni = countif(Name == "rag.generate"),
+            token_prompt_medi = round(avgif(prompt_tokens, Name == "rag.generate")),
+            token_prompt_totali = sumif(prompt_tokens, Name == "rag.generate")
+    by giorno = bin(TimeGenerated, 1d)
+| order by giorno desc

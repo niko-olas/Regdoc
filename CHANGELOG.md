@@ -9,11 +9,24 @@ Qui c'è **cosa** è cambiato; il **perché** è nel [decision log](docs/decisio
 
 ---
 
-## [Non rilasciato] — 2026-10-24/25 · F2–F4
+## [Non rilasciato] — dal 2026-10-24 · F1–F5 — Manifest, scelta per prodotto, due Function App, tracce end-to-end
 
-Immagini: non ancora ricostruite con un nuovo tag (in `up.ps1` restano `regdoc-api:2.2.0` e `regdoc-worker:0.2.0`).
+Immagini del prossimo deploy (tag già in `up.ps1`, non ancora costruite): `regdoc-api:2.3.0` (endpoint
+`/products`, interfaccia per prodotto, prompt e cache senza dati dei clienti, esito della cache sulle tracce),
+`regdoc-worker:0.3.0` (manifest, telemetria). Le Function App non hanno un'immagine: il codice si pubblica con
+`func publish`.
 
 ### Aggiunto
+- **Tracce end-to-end** di un documento in Application Insights: on_blob_created → Service Bus → worker → Cosmos →
+  on_chunks_changed. Il contesto passa nel messaggio (`traceparent`, scritto dall'SDK di Service Bus) e, dove il
+  change feed non trasporta header, nel manifest; `on_chunks_changed` apre uno span per documento.
+- Telemetria del worker (OpenTelemetry, Entra ID) e Function App in `telemetryMode: OpenTelemetry`, con
+  `configure_azure_monitor` esplicito per autenticare il worker Python con Entra ID.
+- Attributo `regdoc.cache` (exact, semantic, miss) sullo span di `/ask`.
+- **Query KQL** in `scripts/tools/kql/`: tempi per fase, tasso di hit della cache, costi (RU e token), viaggio di un
+  documento, errori per componente, log e scaling del worker. Output `logAnalyticsWorkspaceId` del Bicep e
+  variabile `LAW_ID`.
+- **Alert** sui messaggi in dead-letter del topic `documents` (metric alert, visibile in Monitor → Alerts).
 - **Manifest per documento**: il worker lo scrive per ultimo, nella stessa partizione logica dei chunk, con numero
   di chunk, pagine ed etag del blob. Il documento risulta indicizzato solo quando è completo.
 - **Scelta per prodotto**: `GET /products` (dominio, marca, modello, manuali indicizzati) e
@@ -33,6 +46,9 @@ Immagini: non ancora ricostruite con un nuovo tag (in `up.ps1` restano `regdoc-a
   Event Grid e Redis passano all'identità di `catalog`, limitata a 2 istanze e 4 messaggi contemporanei per istanza
   per non saturare le connessioni di PostgreSQL. `up.ps1` pubblica le due app; in `env.example.ps1`
   `FUNCAPP_INGEST` e `FUNCAPP_CATALOG` sostituiscono `FUNCAPP`.
+- `host.json` delle Function App: `telemetryMode: OpenTelemetry`; tolta la sezione `logging.applicationInsights`
+  (sampling), che in quella modalità non si applica. `on_chunks_changed` pubblica un evento e aggiorna catalogo e
+  versione della cache documento per documento, dentro lo span di ciascuno.
 
 ### Corretto
 - Catalogo ed evento segnavano un documento come indicizzato al primo lotto del change feed, quando mancavano

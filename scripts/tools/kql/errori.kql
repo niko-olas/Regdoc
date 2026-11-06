@@ -1,0 +1,21 @@
+// Errori per componente (API, worker, Function App): eccezioni, richieste e dipendenze fallite, raggruppate.
+// Per ogni gruppo c'è un OperationId d'esempio: in viaggio-documento.kql o nella Transaction search del
+// portale mostra l'intera traccia in cui è avvenuto.
+//
+// Uso: az monitor log-analytics query -w $LAW_ID --analytics-query "@scripts/tools/kql/errori.kql" -o table
+let finestra = ago(24h);
+union
+    (AppExceptions
+        | where TimeGenerated > finestra
+        | project TimeGenerated, OperationId, componente = AppRoleName, tipo = "eccezione",
+                  dettaglio = strcat(ExceptionType, ": ", substring(OuterMessage, 0, 120))),
+    (AppRequests
+        | where TimeGenerated > finestra and Success == false
+        | project TimeGenerated, OperationId, componente = AppRoleName, tipo = "richiesta fallita",
+                  dettaglio = strcat(Name, " → ", ResultCode)),
+    (AppDependencies
+        | where TimeGenerated > finestra and Success == false
+        | project TimeGenerated, OperationId, componente = AppRoleName, tipo = "dipendenza fallita",
+                  dettaglio = strcat(DependencyType, " ", Target, " → ", ResultCode))
+| summarize volte = count(), ultima = max(TimeGenerated), esempio = take_any(OperationId) by componente, tipo, dettaglio
+| order by volte desc
