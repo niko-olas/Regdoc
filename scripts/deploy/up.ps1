@@ -86,7 +86,7 @@ Step "5/8 Worker e sottoscrizioni Event Grid (Bicep, seconda passata)"
 Retry { $script:out = Deploy-Bicep "true" } "Seconda passata" 6
 Write-Host "  ok"
 
-Step "6/8 Feature flag in App Configuration"
+Step "6/8 Feature flag e profili di dominio in App Configuration"
 $ac = $out.appConfigEndpoint.value
 Retry {
     az appconfig feature set --endpoint $ac --auth-mode login --feature use-interventions `
@@ -95,9 +95,10 @@ Retry {
     az appconfig feature set --endpoint $ac --auth-mode login --feature semantic-cache `
         --description "Cache semantica delle risposte su Redis" --yes -o none
     az appconfig feature enable --endpoint $ac --auth-mode login --feature semantic-cache --yes -o none
-    az appconfig kv set --endpoint $ac --auth-mode login --key "RegDoc:Sentinel" --value "1" --yes -o none
 } "Scrittura dei feature flag"
 Write-Host "  use-interventions=on, semantic-cache=on"
+# Un profilo per file di infra/appconfig (label = dominio); lo script aggiorna per ultima la sentinella.
+Retry { .venv\Scripts\python.exe scripts\deploy\set_domain_profiles.py $ac } "Scrittura dei profili di dominio"
 
 Step "7/8 PostgreSQL: schema, ruoli di API e Function App catalog, dati di esempio"
 $state = az postgres flexible-server show -g $RG -n $PG --query state -o tsv
@@ -129,5 +130,6 @@ az webapp restart -g $RG -n $out.webAppName.value -o none
 Step "Fatto"
 Write-Host "App:    $($out.webAppUrl.value)"
 Write-Host "KQL:    `$LAW_ID = `"$($out.logAnalyticsWorkspaceId.value)`"   (copialo in env.ps1 per scripts\tools\kql)"
+Write-Host "Redis:  `$env:REDIS_HOST = `"$($out.redisHost.value)`"   (per scripts\tools\redis_peek.py)"
 Write-Host "Prova:  .\scripts\deploy\smoke-test.ps1   (dopo qualche minuto: avvio del container e indicizzazione)"
 Write-Host "Spegni: .\scripts\deploy\down.ps1"

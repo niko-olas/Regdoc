@@ -849,5 +849,7 @@ output pgHost string = pg.properties.fullyQualifiedDomainName
 output storageName string = storage.name
 output cosmosEndpoint string = cosmos.properties.documentEndpoint
 output foundryEndpoint string = foundry.properties.endpoint
+// Host di Redis per scripts/tools/redis_peek.py (REDIS_HOST).
+output redisHost string = redis.properties.hostName
 // Workspace ID (customerId) per le query KQL di scripts/tools/kql con `az monitor log-analytics query -w`.
 output logAnalyticsWorkspaceId string = law.properties.customerId

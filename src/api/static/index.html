@@ -80,8 +80,8 @@ async function loadDocuments() {
       return;
     }
     $("docs").innerHTML = "Manuali disponibili: " + body.documents.map((d) => d.status === "indicizzato"
-      ? `<span class="ok">📄 ${esc(d.doc_type)} (indicizzato il ${fmtDate(d.indexed_at)})</span>`
-      : `<span class="wait">⏳ ${esc(d.doc_type)} (in indicizzazione)</span>`).join(" · ");
+      ? `<span class="ok">📄 ${esc(d.doc_type_label || d.doc_type)} (indicizzato il ${fmtDate(d.indexed_at)})</span>`
+      : `<span class="wait">⏳ ${esc(d.doc_type_label || d.doc_type)} (in indicizzazione)</span>`).join(" · ");
   } catch (e) {
     $("docs").textContent = "";
   }

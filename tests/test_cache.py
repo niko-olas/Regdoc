@@ -33,3 +33,9 @@ def test_bump_versions_incrementa_ogni_dominio_una_volta():
 
 def test_vettore_in_float32():
     assert len(cache._to_bytes([0.0] * 1536)) == 1536 * 4
+
+
+def test_cambiare_il_prompt_del_dominio_cambia_la_chiave():
+    base = cache.scope_of("stufe-pellet", "extraflame", "karolina", True, None, "prompt A")
+    assert base == cache.scope_of("stufe-pellet", "extraflame", "karolina", True, None, "prompt A")
+    assert base != cache.scope_of("stufe-pellet", "extraflame", "karolina", True, None, "prompt B")

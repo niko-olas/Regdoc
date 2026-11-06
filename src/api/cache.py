@@ -40,11 +40,13 @@ RESPONSE_FORMAT = 3
 
 
 def scope_of(domain: str, manufacturer: str | None, model: str | None, use_interventions: bool,
-             serial_number: str | None = None) -> str:
-    """La stessa domanda ha risposte diverse per modelli diversi, con/senza interventi e per impianti
-    diversi (la risposta usa lo storico dell'impianto): tutto ciò che cambia la risposta entra nella chiave."""
+             serial_number: str | None = None, system_prompt: str = "") -> str:
+    """La stessa domanda ha risposte diverse per modelli diversi, con/senza interventi, per impianti
+    diversi (la risposta usa lo storico dell'impianto) e con prompt diversi: tutto ciò che cambia la
+    risposta entra nella chiave. Il prompt entra come hash: cambiarlo nel profilo di dominio in App
+    Configuration rende irraggiungibili le risposte generate con quello vecchio, senza toccare Redis."""
     return (f"f{RESPONSE_FORMAT}|{domain}|{manufacturer or '*'}|{model or '*'}|{serial_number or '*'}|"
-            f"{'int' if use_interventions else 'man'}")
+            f"{'int' if use_interventions else 'man'}|p{_hash(system_prompt)[:8]}")
 
 
 def _hash(*parts: str) -> str:

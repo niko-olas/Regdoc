@@ -141,6 +141,8 @@ def test_manuali_disponibili_per_il_prodotto(monkeypatch):
         app.dependency_overrides.clear()
     assert body["model"] == "extraflame karolina"
     assert body["documents"][0]["status"] == "indicizzato"
+    # Senza profilo di dominio il nome leggibile è il doc_type stesso.
+    assert body["documents"][0]["doc_type_label"] == "manuale-utente"
 
 
 def test_elenco_dei_prodotti_senza_dati_dei_clienti(monkeypatch):

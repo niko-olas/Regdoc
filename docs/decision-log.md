@@ -14,6 +14,27 @@ Formato di una voce:
 
 ---
 
+## 2026-11-06 — Profilo di dominio in App Configuration con una label per dominio
+
+**Decisione**: prompt di sistema e nomi leggibili dei `doc_type` stanno in App Configuration come
+`RegDoc:Profile:Prompt` e `RegDoc:Profile:DocTypes` (content type `application/json`), con **label = dominio**.
+La sorgente è un file per dominio in `infra/appconfig/`, scritto da `scripts/deploy/set_domain_profiles.py`, che
+aggiorna la sentinella per ultima. L'API carica un provider per dominio (filtro sulla label) e lo aggiorna con la
+stessa sentinella. Il prompt nel codice diventa generico; l'hash del prompt entra nella chiave della cache.
+
+**Alternative scartate**: il dominio nel nome della chiave (`RegDoc:Prompt:stufe-pellet`, la soluzione di prima:
+funziona, ma ogni nuovo attributo del profilo moltiplica le chiavi e non usa il meccanismo pensato per varianti
+della stessa configurazione); un solo caricamento con tutte le label (il provider unisce le chiavi in un dizionario:
+la stessa chiave con label diverse si sovrascrive); profilo nel codice (un nuovo dominio richiederebbe un deploy);
+invalidare la cache a ogni cambio di profilo (il prompt nella chiave basta, senza toccare Redis).
+
+**Motivo**: "un nuovo dominio si aggiunge con la configurazione, non con il codice" diventa vero per prompt e tipi
+di documento. Ruolo reale: il prompt delle stufe parla di stufe, e il tecnico legge "Manuale utente" invece del
+nome della cartella nel blob.
+
+**Fase / skill**: F5 — configurazione applicativa con Azure App Configuration (label, content type JSON,
+sentinella e refresh).
+
 ## 2026-11-06 — Una traccia per documento, dall'upload al catalogo; KQL e alert sulle dead-letter
 
 **Decisione**: API, worker e Function App inviano OpenTelemetry ad Application Insights con Entra ID. Il contesto

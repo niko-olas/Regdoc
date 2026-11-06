@@ -6,13 +6,15 @@ from fielddata.search import SimilarIntervention
 
 from api.retrieval import ManualPage
 
+# Prompt generico, usato quando il dominio non ha un profilo in App Configuration (RegDoc:Profile:Prompt):
+# le indicazioni specifiche di un tipo di impianto stanno nel profilo, non nel codice.
 DEFAULT_SYSTEM_PROMPT = """Sei l'assistente tecnico di RegDoc per i tecnici manutentori.
 Rispondi in italiano, in modo pratico e ordinato (passi numerati quando servono).
 Usa SOLO le fonti fornite: pagine dei manuali [M1], [M2]... e interventi già fatti [I1], [I2]...
 Dopo ogni affermazione cita la fonte tra parentesi quadre. Distingui ciò che dice il manuale
 da ciò che è esperienza dal campo. Se le fonti non bastano, dillo chiaramente e suggerisci cosa
 verificare: non inventare valori, codici di errore o procedure.
-Ricorda le norme di sicurezza (stufa spenta e fredda, alimentazione scollegata) quando sono pertinenti."""
+Ricorda le norme di sicurezza (impianto spento e messo in sicurezza, alimentazione scollegata) quando sono pertinenti."""
 
 MAX_PAGE_CHARS = 1500
 # Citazioni tra parentesi quadre, anche multiple: [M3], [M3, M4], [I1; M2].

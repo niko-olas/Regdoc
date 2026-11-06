@@ -25,6 +25,8 @@ configurazione e i documenti, non con il codice.
 - **Cache delle risposte**: la stessa domanda (o una molto simile) ha risposta immediata; le risposte si
   invalidano da sole quando un manuale del dominio cambia.
 - **Feature flag a runtime**: interventi nelle risposte e cache semantica si attivano senza nuovo deploy.
+- **Profilo di dominio** in App Configuration (una label per dominio): prompt e nomi dei tipi di documento si
+  cambiano senza deploy; un nuovo dominio è un file in `infra/appconfig/`.
 
 ## Architettura
 
@@ -131,7 +133,7 @@ repliche). Per azzerare i costi tra una sessione e l'altra:
 | `infra` | `main.bicep`, moduli, schema PostgreSQL |
 | `scripts/deploy` | `up.ps1`, `down.ps1`, `smoke-test.ps1` |
 | `scripts/db` | Schema, permessi delle identità, import dei dati di esempio, riallineamento del catalogo |
-| `scripts/tools` | Diagnosi e misure: query SQL, peek di Service Bus, ricerche vettoriali, benchmark di indici e connessioni, query KQL (`kql/`) |
+| `scripts/tools` | Diagnosi e misure: query SQL, peek di Service Bus, ricerche vettoriali, benchmark di indici e connessioni, cache Redis (`redis_peek.py`), query KQL (`kql/`) |
 
 ## Prima di darlo a un'azienda
 

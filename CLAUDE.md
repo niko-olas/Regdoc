@@ -14,7 +14,7 @@ Il progetto non è legato a un tipo di impianto: il primo **dominio** è `stufe-
 
 - **Campi fissi** (il codice lavora solo su questi): `domain`, `manufacturer`, `model`, `doc_type`, più `page` su ogni chunk perché le risposte citino documento e pagina.
 - **Attributi liberi** per dominio: dizionario `attributes` (es. `potenza_kw` per le stufe), che il codice non interpreta.
-- **Profilo di dominio** in App Configuration, una label per dominio: `doc_type` ammessi, attributi attesi, prompt di sistema.
+- **Profilo di dominio** in App Configuration, una label per dominio (`RegDoc:Profile:*`, label = nome del dominio): prompt di sistema e `doc_type` con il loro nome leggibile. La fonte è `infra/appconfig/<dominio>.json`, scritto da `scripts/deploy/set_domain_profiles.py`; l'API carica un profilo per dominio. Gli attributi attesi entreranno nel profilo quando ci sarà chi li usa.
 - **Dati dal campo** (relazionali, su PostgreSQL): clienti, impianti installati (con `domain`, `manufacturer`, `model` come nei manuali) e interventi con note libere. Il collegamento tra un impianto e i suoi manuali passa per i campi fissi, non per chiavi tra database diversi.
 
 ## Architettura
@@ -104,9 +104,10 @@ infra/
   main.bicep           # tutta l'infrastruttura
   modules/             # moduli Bicep: database e container Cosmos, Function App (piano, storage dell'host, identità)
   postgres/schema.sql  # schema dei dati dal campo e del catalogo
+  appconfig/           # profili di dominio (un file per dominio) da scrivere in App Configuration
 scripts/
   env.example.ps1      # variabili dei comandi az (copia in env.ps1, non tracciato)
-  deploy/              # up.ps1, down.ps1, smoke-test.ps1
+  deploy/              # up.ps1, down.ps1, smoke-test.ps1, set_domain_profiles.py
   db/                  # schema, permessi delle identità, import dei dati di esempio, riallineamento catalogo
   tools/               # strumenti di diagnosi e misura: query, peek Service Bus, ricerche, benchmark
     kql/               #   query KQL su Log Analytics: tempi, cache, costi, viaggio di un documento, errori, worker

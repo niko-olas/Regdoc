@@ -69,7 +69,12 @@ def product_documents(domain: str, manufacturer: str, model: str, svc: Services 
     """I manuali disponibili per il modello: il tecnico sa subito su cosa si basano le risposte."""
     with svc.pool.connection() as conn:
         docs = documents_for_model(conn, domain, manufacturer, model)
-    return {"model": f"{manufacturer} {model}", "documents": [d.__dict__ for d in docs]}
+    # Il nome leggibile del tipo di documento viene dal profilo del dominio in App Configuration.
+    profile = svc.config.profile(domain)
+    return {
+        "model": f"{manufacturer} {model}",
+        "documents": [{**d.__dict__, "doc_type_label": profile.doc_type_label(d.doc_type)} for d in docs],
+    }
 
 
 @app.post("/ask")

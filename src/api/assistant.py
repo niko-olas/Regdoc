@@ -58,8 +58,12 @@ def ask(svc: Services, question: str, *, serial_number: str | None, domain: str,
         domain, manufacturer, model = installation.domain, installation.manufacturer, installation.model
     clock.lap("impianto")
 
+    # Prompt dal profilo del dominio (App Configuration, label = dominio); serve già qui perché entra
+    # nella chiave della cache.
+    system_prompt = svc.config.profile(domain).prompt or answer.DEFAULT_SYSTEM_PROMPT
+
     # 2. Cache esatta: stessa domanda, stesso ambito, stessa versione dei manuali del dominio.
-    scope = cache.scope_of(domain, manufacturer, model, use_interventions, serial_number)
+    scope = cache.scope_of(domain, manufacturer, model, use_interventions, serial_number, system_prompt)
     ver = 0
     if svc.cache:
         ver = _safely(lambda: svc.cache.version(domain), "lettura della versione") or 0
@@ -98,7 +102,6 @@ def ask(svc: Services, question: str, *, serial_number: str | None, domain: str,
         clock.lap("interventi")
 
     # 6. Risposta del modello di chat, con le fonti numerate.
-    system_prompt = svc.config.get(f"Prompt:{domain}", answer.DEFAULT_SYSTEM_PROMPT)
     user_message = answer.build_user_message(question, installation, past, manuals, similar)
     with tracer.start_as_current_span("rag.generate") as span:
         text, usage = answer.generate(svc.chat, svc.chat_deployment, system_prompt, user_message)

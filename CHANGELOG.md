@@ -27,6 +27,12 @@ Immagini del prossimo deploy (tag già in `up.ps1`, non ancora costruite): `regd
   documento, errori per componente, log e scaling del worker. Output `logAnalyticsWorkspaceId` del Bicep e
   variabile `LAW_ID`.
 - **Alert** sui messaggi in dead-letter del topic `documents` (metric alert, visibile in Monitor → Alerts).
+- **Profilo di dominio** in App Configuration con label = dominio (`RegDoc:Profile:Prompt`,
+  `RegDoc:Profile:DocTypes` in JSON): sorgente in `infra/appconfig/<dominio>.json`, scritto da
+  `scripts/deploy/set_domain_profiles.py` (chiamato da `up.ps1`). I manuali di un prodotto mostrano il nome leggibile
+  del tipo di documento (`doc_type_label`).
+- `scripts/tools/redis_peek.py`: versioni dei manuali, risposte in cache con TTL e indice vettoriale, distanze tra
+  coppie di domande contro la soglia della cache semantica. Output `redisHost` del Bicep.
 - **Manifest per documento**: il worker lo scrive per ultimo, nella stessa partizione logica dei chunk, con numero
   di chunk, pagine ed etag del blob. Il documento risulta indicizzato solo quando è completo.
 - **Scelta per prodotto**: `GET /products` (dominio, marca, modello, manuali indicizzati) e
@@ -46,6 +52,10 @@ Immagini del prossimo deploy (tag già in `up.ps1`, non ancora costruite): `regd
   Event Grid e Redis passano all'identità di `catalog`, limitata a 2 istanze e 4 messaggi contemporanei per istanza
   per non saturare le connessioni di PostgreSQL. `up.ps1` pubblica le due app; in `env.example.ps1`
   `FUNCAPP_INGEST` e `FUNCAPP_CATALOG` sostituiscono `FUNCAPP`.
+- Il prompt di sistema viene dal profilo del dominio (prima `RegDoc:Prompt:{dominio}`); quello nel codice è generico
+  e vale solo per i domini senza profilo. L'hash del prompt entra nella chiave della cache: cambiare il prompt
+  rende irraggiungibili le risposte generate con quello vecchio. La sentinella la aggiorna lo script dei profili,
+  per ultima.
 - `host.json` delle Function App: `telemetryMode: OpenTelemetry`; tolta la sezione `logging.applicationInsights`
   (sampling), che in quella modalità non si applica. `on_chunks_changed` pubblica un evento e aggiorna catalogo e
   versione della cache documento per documento, dentro lo span di ciascuno.
